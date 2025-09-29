@@ -1,0 +1,62 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: fintechguardian
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - postgres-deployment.yaml
+  - mongodb-deployment.yaml
+  - redis-deployment.yaml
+  - kafka-deployment.yaml
+  - gateway-deployment.yaml
+  - customer-profile-deployment.yaml
+  - transaction-monitoring-deployment.yaml
+  - compliance-case-deployment.yaml
+  - regulatory-reporting-deployment.yaml
+  - risk-engine-deployment.yaml
+  - ingress.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: gateway-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          memory: "512Mi"
+          cpu: "500m"
+      
+images:
+  - name: fintechguardian/gateway-service
+    newTag: latest
+  - name: fintechguardian/customer-profile-service
+    newTag: latest
+  - name: fintechguardian/transaction-monitoring-service
+    newTag: latest
+  - name: fintechguardian/compliance-case-management-service
+    newTag: latest
+  - name: fintechguardian/regulatory-reporting-service
+    newTag: latest
+  - name: fintechguardian/risk-engine-service
+    newTag: latest
+
+configMapGenerator:
+  - name: app-config
+    files:
+      - config/application.yml
+    options:
+      disableNameSuffixHash: true
+
+secretGenerator:
+  - name: app-secrets
+    literals:
+      - jwt-secret=production-secure-jwt-secret-key-financial-industry-2024
+      - postgres-password=postgres-super-secure-password-2024
+      - mongo-password=mongo-super-secure-password-2024
+      - redis-password=redis-super-secure-password-2024
+    options:
+      disableNameSuffixHash: true
