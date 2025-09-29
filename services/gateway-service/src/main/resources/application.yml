@@ -1,0 +1,247 @@
+server:
+  port: 8080
+  http2:
+    enabled: true
+
+spring:
+  application:
+    name: gateway-service
+  
+  profiles:
+    active: dev
+  
+  # Threading virtual do Java 23
+  threads:
+    virtual:
+      enabled: true
+  
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      
+      routes:
+        # Customer Profile Service
+        - id: customer-profile-service
+          uri: lb://customer-profile-service
+          predicates:
+            - Path=/api/v1/customers/**
+          filters:
+            - StripPrefix=1
+            - CircuitBreaker=customer-profile-circuit
+            
+        # Transaction Monitoring Service  
+        - id: transaction-monitoring-service
+          uri: lb://transaction-monitoring-service
+          predicates:
+            - Path=/api/v1/transactions/**
+          filters:
+            - StripPrefix=1
+            - CircuitBreaker=transaction-circuit
+            
+        # Compliance Case Management Service
+        - id: compliance-case-service
+          uri: lb://compliance-case-management-service
+          predicates:
+            - Path=/api/v1/compliance/**
+          filters:
+            - StripPrefix=1
+            - CircuitBreaker=compliance-case-circuit
+            
+        # Regulatory Reporting Service
+        - id: regulatory-reporting-service
+          uri: lb://regulatory-reporting-service
+          predicates:
+            - Path=/api/v1/reports/**
+          filters:
+            - StripPrefix=1
+            - CircuitBreaker=reporting-circuit
+            
+        # Risk Engine Service
+        - id: risk-engine-service
+          uri: lb://risk-engine-service
+          predicates:
+            - Path=/api/v1/risk/**
+          filters:
+            - StripPrefix=1
+            - CircuitBreaker=risk-engine-circuit
+            
+      default-filters:
+        # Rate limiting por IP
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 100
+            redis-rate-limiter.burstCapacity: 200
+            redis-rate-limiter.requestedTokens: 1
+            key-resolver: "#{@ipKeyResolver}"
+        
+        # Headers de segurança
+        - RemoveRequestHeader=X-Future-*
+        - name: AddResponseHeader
+          args:
+            name: X-FinTechGuardian-Version
+            value: ${spring.application.version:1.0.0}
+        
+        # Timeout global
+        - name: CircuitBreaker
+          args:
+            name: global-circuit-breaker
+            fallbackUri: forward:/fallback/timeout
+  
+  # Redis para rate limiting
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+# Configurações de segurança JWT
+security:
+  jwt:
+    secret: ${JWT_SECRET:devel-opment-secret-key-for-financial-industry-compliance-change-in-production}
+    expiration-ms: ${JWT_EXPIRATION_MS:3600000}  # 1 hora
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}  # 7 dias
+  
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,https://app.fintechguardian.com}
+    allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+    allowed-headers: ${CORS_ALLOWED_HEADERS:authorization,content-type,x-requested-with,x-user-id,x-organization-id}
+
+# Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      customer-profile-circuit:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 2s
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        
+      transaction-circuit:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        slow-call-rate-threshold: 70
+        slow-call-duration-threshold: 3s
+        failure-rate-threshold: 40
+        wait-duration-in-open-state: 30s
+        
+      compliance-case-circuit:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 5s
+        failure-rate-threshold: 30
+        wait-duration-in-open-state: 45s
+        
+      reporting-circuit:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 3
+        slow-call-rate-threshold: 40
+        slow-call-duration-threshold: 10s
+        failure-rate-threshold: 25
+        wait-duration-in-open-state: 60s
+        
+      risk-engine-circuit:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 2s
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+
+  timeout:
+    instances:
+      gateway-timeout:
+        timeout-duration: 10s
+        cancel-running-future: true
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,circuitbreakers,gateway,scoped-metrics
+      base-path: /actuator
+  
+  endpoint:
+    health:
+      show-details: when-authorized
+      
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        
+  tracing:
+    sampling:
+      probability: ${TRACE_SAMPLING_PROBABILITY:0.1}
+
+# Logging Configuration
+logging:
+  level:
+    com.fintechguardian: ${LOG_LEVEL_APP:INFO}
+    org.springframework.cloud.gateway: ${LOG_LEVEL_GATEWAY:INFO}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:WARN}
+    reactor.netty: ${LOG_LEVEL_REACTOR:WARN}
+    
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{exchangeId}] %logger{36} - %msg%n"
+    
+# OpenAPI Configuration  
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    display-request-duration: true
+    try-it-out-enabled: true
+
+# Profiling específico
+spring:
+  config:
+    activate:
+      on-profile: prod
+      
+  cloud:
+    gateway:
+      routes:
+        - id: production-rate-limit
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+
+security:
+  jwt:
+    secret: test-secret-key-for-integration-tests-only
+    expiration-ms: 300000  # 5 minutos para testes
+
+logging:
+  level:
+    com.fintechguardian: DEBUG
+    org.springframework.cloud.gateway: DEBUG
