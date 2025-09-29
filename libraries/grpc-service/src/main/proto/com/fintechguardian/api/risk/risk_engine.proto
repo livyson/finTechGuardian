@@ -1,0 +1,280 @@
+syntax = "proto3";
+
+package com.fintechguardian.api.risk;
+
+option java_multiple_files = true;
+option java_package = "com.fintechguardian.api.risk";
+option java_outer_classname = "RiskEngineProto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// Risk Engine Service gRPC API
+service RiskEngineService {
+  // Risk Assessment Operations
+  rpc PerformRiskAssessment(RiskAssessmentRequest) returns (RiskAssessmentResponse);
+  rpc PerformQuickAssessment(QuickAssessmentRequest) returns (QuickAssessmentResponse);
+  rpc BatchRiskAssessment(BatchRiskAssessmentRequest) returns (stream RiskAssessmentResponse);
+  
+  // Risk Model Management
+  rpc GetRiskModels(GetRiskModelsRequest) returns (stream RiskModel);
+  rpc GetRiskModelById(GetRiskModelByIdRequest) returns (RiskModel);
+  rpc DeployRiskModel(DeployRiskModelRequest) returns (DeployRiskModelResponse);
+  
+  // Rules Management  
+  rpc ReloadRules(ReloadRulesRequest) returns (ReloadRulesResponse);
+  rpc GetRuleStatistics(GetRuleStatisticsRequest) returns (RuleStatisticsResponse);
+  rpc TestRules(TestRulesRequest) returns (TestRulesResponse);
+  
+  // Real-time Risk Monitoring
+  rpc StreamRiskMonitoring(RiskMonitoringRequest) returns (stream RiskAlert);
+  rpc UpdateRiskThresholds(UpdateRiskThresholdsRequest) returns (UpdateRiskThresholdsResponse);
+}
+
+// Risk Assessment Request/Response
+message RiskAssessmentRequest {
+  string entity_id = 1;
+  EntityType entity_type = 2;
+  string risk_model_id = 3;
+  AssessmentType assessment_type = 4;
+  string assessment_date = 5;
+  map<string, google.protobuf.Value> entity_data = 6;
+  repeated RiskFactor risk_factors = 7;
+  map<string, google.protobuf.Value> additional_context = 8;
+  bool include_explanation = 9;
+}
+
+message RiskAssessmentResponse {
+  string assessment_id = 1;
+  string status = 2;
+  RiskLevel risk_level = 3;
+  double risk_score = 4;
+  double confidence_level = 5;
+  repeated RiskFactor assessed_factors = 6;
+  RiskExplanation explanation = 7;
+  repeated AutomatedAction recommended_actions = 8;
+  string assessment_date = 9;
+  int64 processing_time_ms = 10;
+  string model_version = 11;
+  repeated ValidationError validation_errors = 12;
+}
+
+// Quick Assessment for real-time scenarios
+message QuickAssessmentRequest {
+  string entity_id = 1;
+  EntityType entity_type = 2;
+  map<string, google.protobuf.Value> quick_data = 3;
+  TimeWindow time_window = 4;
+}
+
+message QuickAssessmentResponse {
+  string status = 1;
+  RiskLevel risk_level = 2;
+  double risk_score = 3;
+  bool requires_full_assessment = 4;
+  string next_assessment_date = 5;
+  repeated string triggered_rules = 6;
+  int32 estimated_processing_time_ms = 7;
+}
+
+// Risk Model Management
+message RiskModel {
+  string model_id = 1;
+  string model_name = 2;
+  string model_version = 3;
+  ModelType model_type = 4;
+  string description = 5;
+  bool is_active = 6;
+  string created_by = 7;
+  string created_at = 8;
+  string last_deployed = 9;
+  ModelPerformance performance = 10;
+  repeated RiskThreshold thresholds = 11;
+  map<string, google.protobuf.Value> parameters = 12;
+}
+
+message ModelPerformance {
+  double accuracy = 1;
+  double precision = 2;
+  double recall = 3;
+  double f1_score = 4;
+  int32 false_positives = 5;
+  int32 false_negatives = 6;
+  double calibration_score = 7;
+}
+
+message DeployRiskModelRequest {
+  string model_id = 1;
+  string deployment_reason = 2;
+  string deployed_by = 3;
+  bool activate_immediately = 4;
+  map<string, google.protobuf.Value> deployment_config = 5;
+}
+
+message DeployRiskModelResponse {
+  string status = 1;
+  string message = 2;
+  string deployment_id = 3;
+  string activated_at = 4;
+}
+
+// Rules Management
+message ReloadRulesRequest {
+  repeated string rule_files = 1;
+  bool restart_engine = 2;
+  string reload_reason = 3;
+}
+
+message ReloadRulesResponse {
+  string status = 1;
+  string message = 2;
+  int32 rules_loaded = 3;
+  int32 rules_failed = 4;
+  repeated string failed_rules = 5;
+  string reload_timestamp = 6;
+}
+
+message RuleStatisticsResponse {
+  int32 total_rules = 1;
+  int32 active_rules = 2;
+  int32 triggered_rules_last_hour = 3;
+  int32 triggered_rules_last_day = 4;
+  map<string, int32> rule_trigger_counts = 5;
+  repeated MostTriggeredRule most_triggered_rules = 6;
+}
+
+// Risk Monitoring
+message RiskMonitoringRequest {
+  repeated string entity_ids = 1;
+  MonitoringLevel monitoring_level = 2;
+  int32 monitoring_interval_minutes = 3;
+  map<string, google.protobuf.Value> custom_thresholds = 4;
+}
+
+message RiskAlert {
+  string alert_id = 1;
+  AlertLevel alert_level = 2;
+  string entity_id = 3;
+  RiskLevel risk_level = 4;
+  string alert_type = 5;
+  string message = 6;
+  map<string, google.protobuf.Value> alert_data = 7;
+  string triggered_at = 8;
+  bool acknowledged = 9;
+  repeated AutomatedAction automation_actions = 10;
+}
+
+// Supporting Messages
+message RiskFactor {
+  string factor_name = 1;
+  double weight = 2;
+  double value = 3;
+  string factor_type = 4;
+  string description = 5;
+  bool is_positive = 6;
+  string calculation_method = 7;
+}
+
+message RiskExplanation {
+  string summary = 1;
+  repeated string key_factors = 2;
+  repeated string triggered_rules = 3;
+  string reasoning = 4;
+  double certainty = 5;
+  repeated RiskInterpretation interpretations = 6;
+}
+
+message RiskInterpretation {
+  string factor = 1;
+  double weight = 2;
+  string interpretation = 3;
+  string recommendation = 4;
+}
+
+message AutomatedAction {
+  string action_type = 1;
+  string description = 2;
+  bool executed = 3;
+  string execution_result = 4;
+  string suggested_timing = 5;
+  map<string, string> parameters = 6;
+}
+
+message RiskThreshold {
+  RiskLevel threshold_level = 1;
+  double minimum_score = 2;
+  double maximum_score = 3;
+  string threshold_name = 4;
+  string description = 5;
+  bool enabled = 6;
+}
+
+message TimeWindow {
+  int32 window_minutes = 1;
+  string start_time = 2;
+  string end_time = 3;
+}
+
+message ValidationError {
+  string field = 1;
+  string error_code = 2;
+  string message = 3;
+}
+
+message MostTriggeredRule {
+  string rule_name = 1;
+  string rule_file = 2;
+  int32 trigger_count = 3;
+}
+
+// Enums
+enum EntityType {
+  ENTITY_TYPE_UNSPECIFIED = 0;
+  CUSTOMER = 1;
+  TRANSACTION = 2;
+  ACCOUNT = 3;
+  COUNTERPARTY = 4;
+  PRODUCT = 5;
+}
+
+enum AssessmentType {
+  ASSESSMENT_TYPE_UNSPECIFIED = 0;
+  INITIAL_ONBOARDING = 1;
+  PERIODIC_REVIEW = 2;
+  EVENT_TRIGGERED = 3;
+  TRANSACTION_BASED = 4;
+  ENHANCED_DUE_DILIGENCE = 5;
+}
+
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  VERY_LOW = 1;
+  LOW = 2;
+  MEDIUM = 3;
+  HIGH = 4;
+  CRITICAL = 5;
+}
+
+enum ModelType {
+  MODEL_TYPE_UNSPECIFIED = 0;
+  STATISTICAL = 1;
+  MACHINE_LEARNING = 2;
+  RULE_BASED = 3;
+  HYBRID = 4;
+}
+
+enum MonitoringLevel {
+  MONITORING_LEVEL_UNSPECIFIED = 0;
+  BASIC = 1;
+  STANDARD = 2;
+  ENHANCED = 3;
+  CRITICAL = 4;
+}
+
+enum AlertLevel {
+  ALERT_LEVEL_UNSPECIFIED = 0;
+  INFO = 1;
+  WARNING = 2;
+  CRITICAL = 3;
+  EMERGENCY = 4;
+}

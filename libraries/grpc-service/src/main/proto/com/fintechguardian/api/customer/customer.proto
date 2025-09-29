@@ -1,0 +1,321 @@
+syntax = "proto3";
+
+package com.fintechguardian.api.customer;
+
+option java_multiple_files = true;
+option java_package = "com.fintechguardian.api.customer";
+option java_outer_classname = "CustomerProto";
+
+// Customer Profile Service gRPC API
+service CustomerProfileService {
+  // CRUD Operations
+  rpc GetCustomer(GetCustomerRequest) returns (GetCustomerResponse);
+  rpc CreateCustomer(CreateCustomerRequest) returns (CreateCustomerResponse);
+  rpc UpdateCustomer(UpdateCustomerRequest) returns (UpdateCustomerResponse);
+  rpc DeleteCustomer(DeleteCustomerRequest) returns (DeleteCustomerResponse);
+  
+  // Query Operations
+  rpc SearchCustomers(SearchCustomersRequest) returns (stream CustomerSummary);
+  rpc GetCustomersByRiskLevel(GetCustomersByRiskLevelRequest) returns (stream CustomerSummary);
+  rpc GetExpiredKycCustomers(GetExpiredKycRequest) returns (stream CustomerSummary);
+  
+  // Business Operations
+  rpc BlockCustomer(BlockCustomerRequest) returns (BlockCustomerStatus);
+  rpc UnblockCustomer(UnblockCustomerRequest) returns (UnblockCustomerStatus);
+  rpc UpdateRiskLevel(UpdateRiskLevelRequest) returns (UpdateRiskLevelStatus);
+  
+  // Validation Operations
+  rpc ValidateCustomerData(ValidateCustomerDataRequest) returns (ValidateResponse);
+  rpc PerformKycValidation(PerformKycValidationRequest) returns (ValidateResponse);
+}
+
+// Customer Entity Messages
+message Customer {
+  string id = 1;
+  string document_number = 2;
+  DocumentType document_type = 3;
+  string name = 4;
+  string legal_name = 5;
+  string email = 6;
+  string phone_number = 7;
+  CustomerType customer_type = 8;
+  RiskLevel risk_level = 9;
+  string date_of_birth = 10;
+  string place_of_birth = 11;
+  string nationality = 12;
+  string occupation = 13;
+  double monthly_income = 14;
+  double annual_income = 15;
+  
+  // Compliance Flags
+  bool pep_flag = 16;
+  string pep_relationship = 17;
+  bool sanctions_checked = 18;
+  string kyc_status = 19;
+  int32 kyc_level = 20;
+  string kyc_date = 21;
+  string kyc_expiry_date = 22;
+  
+  // Address
+  Address address = 23;
+  
+  // Customer Status
+  CustomerStatus status = 24;
+  string status_reason = 25;
+  string blocked_until = 26;
+  
+  // Metadata
+  string tags = 27;
+  string source = 28;
+  string external_id = 29;
+  string metadata = 30;
+  
+  // Audit Fields
+  string created_at = 31;
+  string updated_at = 32;
+  string updated_by = 33;
+  int64 version = 34;
+}
+
+// Address Message
+message Address {
+  string street = 1;
+  string number = 2;
+  string complement = 3;
+  string neighborhood = 4;
+  string city = 5;
+  string state = 6;
+  string zip_code = 7;
+  string country = 8;
+  string country_code = 9;
+}
+
+// Enums
+enum DocumentType {
+  DOCUMENT_TYPE_UNSPECIFIED = 0;
+  CPF = 1;
+  CNPJ = 2;
+  PASSPORT = 3;
+  RG = 4;
+  FOREIGN_ID = 5;
+  OTHER = 6;
+}
+
+enum CustomerType {
+  CUSTOMER_TYPE_UNSPECIFIED = 0;
+  INDIVIDUAL = 1;
+  CORPORATE = 2;
+  MICROBUSINESS = 3;
+  SME = 4;
+  GOVERNMENT = 5;
+  NON_PROFIT = 6;
+}
+
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  VERY_LOW = 1;
+  LOW = 2;
+  MEDIUM = 3;
+  HIGH = 4;
+  CRITICAL = 5;
+}
+
+enum CustomerStatus {
+  CUSTOMER_STATUS_UNSPECIFIED = 0;
+  ACTIVE = 1;
+  INACTIVE = 2;
+  PENDING_VERIFICATION = 3;
+  BLOCKED = 4;
+  LOCKED = 5;
+  SUSPENDED = 6;
+  DELETED = 7;
+}
+
+// Request Messages
+message GetCustomerRequest {
+  string customer_id = 1;
+  bool include_documents = 2;
+  bool include_notes = 3;
+}
+
+message CreateCustomerRequest {
+  Customer customer = 1;
+  bool validate_before_create = 2;
+}
+
+message UpdateCustomerRequest {
+  string customer_id = 1;
+  Customer customer = 2;
+  bool validate_before_update = 3;
+}
+
+message DeleteCustomerRequest {
+  string customer_id = 1;
+  string reason = 2;
+}
+
+message SearchCustomersRequest {
+  string query = 1;
+  repeated CustomerType customer_types = 2;
+  repeated RiskLevel risk_levels = 3;
+  repeated CustomerStatus statuses = 4;
+  string country = 5;
+  int32 page_size = 6;
+  int32 page_token = 7;
+}
+
+message GetCustomersByRiskLevelRequest {
+  RiskLevel risk_level = 1;
+  int32 page_size = 2;
+  int32 page_token = 3;
+}
+
+message GetExpiredKycRequest {
+  int32 days_expired = 1;
+  bool include_critical_only = 2;
+}
+
+message BlockCustomerRequest {
+  string customer_id = 1;
+  string reason = 2;
+  string blocked_by = 3;
+  string blocked_until = 4;  // ISO timestamp
+}
+
+message UnblockCustomerRequest {
+  string customer_id = 1;
+  string reason = 2;
+  string unblocked_by = 3;
+}
+
+message UpdateRiskLevelRequest {
+  string customer_id = 1;
+  RiskLevel new_risk_level = 2;
+  string reason = 3;
+  string updated_by = 4;
+  string notes = 5;
+}
+
+message ValidateCustomerDataRequest {
+  Customer customer = 1;
+  repeated ValidationRule validation_rules = 2;
+}
+
+message PerformKycValidationRequest {
+  string customer_id = 1;
+  string validation_type = 2;
+  map<string, string> validation_data = 3;
+}
+
+// Response Messages
+message GetCustomerResponse {
+  Customer customer = 1;
+  google.protobuf.Timestamp retrieved_at = 2;
+}
+
+message CreateCustomerResponse {
+  string status = 1;
+  string message = 2;
+  Customer created_customer = 3;
+  repeated ValidationError validation_errors = 4;
+}
+
+message UpdateCustomerResponse {
+  string status = 1;
+  string message = 2;
+  Customer updated_customer = 3;
+  repeated ValidationError validation_errors = 4;
+}
+
+message DeleteCustomerResponse {
+  string status = 1;
+  string message = 2;
+  bool deleted = 3;
+}
+
+message CustomerSummary {
+  string id = 1;
+  string document_number = 2;
+  DocumentType document_type = 3;
+  string name = 4;
+  CustomerType customer_type = 5;
+  RiskLevel risk_level = 6;
+  CustomerStatus status = 7;
+  string pep_status = 8;
+  string kyc_status = 9;
+  string last_activity_date = 10;
+  int32 transaction_count = 11;
+  double total_transaction_value = 12;
+}
+
+message BlockCustomerStatus {
+  string status = 1;
+  string message = 2;
+  bool blocked = 3;
+  string blocked_at = 4;
+  string blocked_until = 5;
+}
+
+message UnblockCustomerStatus {
+  string status = 1;
+  string message = 2;
+  bool unblocked = 3;
+  string unblocked_at = 4;
+}
+
+message UpdateRiskLevelStatus {
+  string status = 1;
+  string message = 2;
+  RiskLevel old_risk_level = 3;
+  RiskLevel new_risk_level = 4;
+  string updated_at = 5;
+}
+
+message ValidateResponse {
+  bool valid = 1;
+  repeated ValidationError errors = 2;
+  repeated ValidationWarning warnings = 3;
+  double confidence_score = 4;
+}
+
+// Supporting Messages
+message ValidationRule {
+  string rule_id = 1;
+  string rule_name = 2;
+  bool enabled = 3;
+}
+
+message ValidationError {
+  string field = 1;
+  string error_code = 2;
+  string message = 3;
+  string suggested_fix = 4;
+}
+
+message ValidationWarning {
+  string field = 1;
+  string warning_code = 2;
+  string message = 3;
+}
+
+// gRPC Error Status Codes
+enum GrpcStatusCode {
+  GRPC_STATUS_UNSPECIFIED = 0;
+  OK = 1;
+  CANCELLED = 2;
+  UNKNOWN = 3;
+  INVALID_ARGUMENT = 4;
+  DEADLINE_EXCEEDED = 5;
+  NOT_FOUND = 6;
+  ALREADY_EXISTS = 7;
+  PERMISSION_DENIED = 8;
+  RESOURCE_EXHAUSTED = 9;
+  FAILED_PRECONDITION = 10;
+  ABORTED = 11;
+  OUT_OF_RANGE = 12;
+  UNIMPLEMENTED = 13;
+  INTERNAL = 14;
+  UNAVAILABLE = 15;
+  DATA_LOSS = 16;
+  UNAUTHENTICATED = 17;
+}

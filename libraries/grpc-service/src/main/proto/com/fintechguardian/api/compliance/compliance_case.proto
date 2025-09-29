@@ -1,0 +1,445 @@
+syntax = "proto3";
+
+package com.fintechguardian.api.compliance;
+
+option java_multiple_files = true;
+option java_package = "com.fintechguardian.api.compliance";
+option java_outer_classname = "ComplianceCaseProto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// Compliance Case Management Service gRPC API
+service ComplianceCaseManagementService {
+  // Case CRUD Operations
+  rpc CreateComplianceCase(CreateCaseRequest) returns (CreateCaseResponse);
+  rpc GetComplianceCase(GetCaseRequest) returns (GetCaseResponse);
+  rpc UpdateComplianceCase(UpdateCaseRequest) returns (UpdateCaseResponse);
+  rpc CloseComplianceCase(CloseCaseRequest) returns (CloseCaseResponse);
+  
+  // Case Query Operations
+  rpc SearchCases(SearchCasesRequest) returns (stream ComplianceCaseSummary);
+  rpc GetCasesByAnalyst(GetCasesByAnalystRequest) returns (stream ComplianceCaseSummary);
+  rpc GetCasesByStatus(GetCasesByStatusRequest) returns (stream ComplianceCaseSummary);
+  rpc GetCasesByPriority(GetCasesByPriorityRequest) returns (stream ComplianceCaseSummary);
+  
+  // Case Management Operations
+  rpc AssignCase(AssignCaseRequest) returns (AssignCaseResponse);
+  rpc EscalateCase(EscalateCaseRequest) returns (EscalateCaseResponse);
+  rpc AddCaseNote(AddCaseNoteRequest) returns (AddCaseNoteResponse);
+  rpc UploadCaseDocument(UploadCaseDocumentRequest) returns (UploadCaseDocumentResponse);
+  
+  // Case Resolution Operations
+  rpc ResolveCase(ResolveCaseRequest) returns (ResolveCaseResponse);
+  rpc RequestMoreInfo(RequestMoreInfoRequest) returns (RequestMoreInfoResponse);
+  rpc SubmitResolution(SubmitResolutionRequest) returns (SubmitResolutionResponse);
+  
+  // Case Analytics Operations
+  rpc GetCaseStatistics(GetCaseStatisticsRequest) returns (CaseStatisticsResponse);
+  rpc GetAnalystPerformance(GetAnalystPerformanceRequest) returns (AnalystPerformanceResponse);
+  rpc GetCaseTimeline(GetCaseTimelineRequest) returns (CaseTimelineResponse);
+  
+  // Automated Case Processing
+  rpc ProcessAutomatedAlert(ProcessAutomatedAlertRequest) returns (ProcessAutomatedAlertResponse);
+  rpc AutoAssignCases(AutoAssignCasesRequest) returns (AutoAssignCasesResponse);
+  rpc GenerateCaseReport(GenerateCaseReportRequest) returns (stream CaseReportChunk);
+}
+
+// Compliance Case Entity
+message ComplianceCase {
+  string id = 1;
+  string case_number = 2;
+  string customer_id = 3;
+  CaseType case_type = 4;
+  CaseStatus status = 5;
+  CasePriority priority = 6;
+  RiskLevel risk_level = 7;
+  
+  // Case Information
+  string title = 8;
+  string description = 9;
+  string summary = 10;
+  string compliance_rule_violation = 11;
+  string regulation_component = 12;
+  
+  // Timeline
+  string created_at = 13;
+  string due_date = 14;
+  string resolution_date = 15;
+  string closed_date = 16;
+  int32 estimated_hours = 17;
+  int32 actual_hours = 18;
+  
+  // Assignment
+  string assigned_to = 19;
+  string assigned_by = 20;
+  string assignment_date = 21;
+  string reviewed_by = 22;
+  string approved_by = 23;
+  
+  // Case Data
+  double suspicious_amount = 24;
+  double actual_loss = 25;
+  double potential_exposure = 26;
+  double fine_amount = 27;
+  string evidence_summary = 28;
+  
+  // Workflow
+  string workflow_instance_id = 29;
+  int32 workflow_step = 30;
+  string workflow_step_name = 31;
+  string next_action = 32;
+  
+  // Resolution
+  ResolutionType resolution_type = 33;
+  string resolution_notes = 34;
+  string actions_taken = 35;
+  string preventive_measures = 36;
+  bool requires_reporting = 37;
+  bool report_submitted = 38;
+  
+  // Metadata
+  string metadata = 39;
+  string audit_trail = 40;
+  int64 version = 41;
+  
+  // Related Entities
+  repeated CaseTransaction related_transactions = 42;
+  repeated CaseNote notes = 43;
+  repeated CaseDocument documents = 44;
+}
+
+// Supporting Entities
+message CaseTransaction {
+  string id = 1;
+  string compliance_case_id = 2;
+  string transaction_id = 3;
+  string customer_id = 4;
+  double amount = 5;
+  string currency = 6;
+  string transaction_date = 7;
+  string transaction_type = 8;
+  double relevance_score = 9;
+  string suspicious_indicator = 10;
+  string evidence_type = 11;
+  string investigation_notes = 12;
+  bool is_primary_evidence = 13;
+}
+
+message CaseNote {
+  string id = 1;
+  string compliance_case_id = 2;
+  NoteType note_type = 3;
+  string content = 4;
+  string created_by = 5;
+  string created_at = 6;
+  bool is_internal = 7;
+}
+
+message CaseDocument {
+  string id = 1;
+  string compliance_case_id = 2;
+  string document_name = 3;
+  string document_type = 4;
+  string file_path = 5;
+  string mime_type = 6;
+  int64 file_size = 7;
+  string uploaded_by = 8;
+  string uploaded_at = 9;
+  bool is_confidential = 10;
+}
+
+// Request/Response Messages
+message CreateCaseRequest {
+  string customer_id = 1;
+  CaseType case_type = 2;
+  string title = 3;
+  string description = 4;
+  CasePriority priority = 5;
+  double suspicious_amount = 6;
+  string compliance_rule_violation = 7;
+  string regulation_component = 8;
+  map<string, google.protobuf.Value> evidence_data = 9;
+  string created_by = 10;
+  bool automatic_trigger = 11;
+  string source_system = 12;
+}
+
+message CreateCaseResponse {
+  string status = 1;
+  string message = 2;
+  ComplianceCase created_case = 3;
+  string workflow_instance_id = 4;
+  repeated ValidationError validation_errors = 5;
+}
+
+message GetCaseRequest {
+  string case_id = 1;
+  bool include_transactions = 2;
+  bool include_notes = 3;
+  bool include_documents = 4;
+  bool include_workflow_status = 5;
+}
+
+message GetCaseResponse {
+  ComplianceCase case = 1;
+  google.protobuf.Timestamp retrieved_at = 2;
+}
+
+message UpdateCaseRequest {
+  string case_id = 1;
+  ComplianceCase case_data = 2;
+  string updated_by = 3;
+  bool validate_before_update = 4;
+}
+
+message UpdateCaseResponse {
+  string status = 1;
+  string message = 2;
+  ComplianceCase updated_case = 3;
+  repeated ValidationError validation_errors = 4;
+}
+
+message AssignCaseRequest {
+  string case_id = 1;
+  string analyst_id = 2;
+  string assigned_by = 3;
+  string assignment_reason = 4;
+}
+
+message AssignCaseResponse {
+  string status = 1;
+  string message = 2;
+  bool assigned = 3;
+  string assigned_at = 4;
+}
+
+message EscalateCaseRequest {
+  string case_id = 1;
+  string escalated_by = 2;
+  string escalation_reason = 3;
+  CasePriority new_priority = 4;
+  string escalation_notes = 5;
+}
+
+message EscalateCaseResponse {
+  string status = 1;
+  string message = 2;
+  bool escalated = 3;
+  CasePriority previous_priority = 4;
+  CasePriority new_priority = 5;
+}
+
+message ResolveCaseRequest {
+  string case_id = 1;
+  ResolutionType resolution_type = 2;
+  string resolution_notes = 3;
+  string actions_taken = 4;
+  string preventive_measures = 5;
+  string resolved_by = 6;
+  int32 actual_hours = 7;
+}
+
+message ResolveCaseResponse {
+  string status = 1;
+  string message = 2;
+  bool resolved = 3;
+  string resolution_date = 4;
+}
+
+message CloseCaseRequest {
+  string case_id = 1;
+  string closed_by = 2;
+  string final_notes = 3;
+  bool archive_data = 4;
+}
+
+message CloseCaseResponse {
+  string status = 1;
+  string message = 2;
+  bool closed = 3;
+  string closed_at = 4;
+}
+
+// Query Requests/Responses
+message SearchCasesRequest {
+  string query = 1;
+  repeated CaseType case_types = 2;
+  repeated CaseStatus statuses = 3;
+  repeated CasePriority priorities = 4;
+  repeated RiskLevel risk_levels = 5;
+  string assigned_to = 6;
+  string date_range_start = 7;
+  string date_range_end = 8;
+  int32 page_size = 9;
+  int32 page_token = 10;
+}
+
+message ComplianceCaseSummary {
+  string id = 1;
+  string case_number = 2;
+  string customer_id = 3;
+  CaseType case_type = 4;
+  CaseStatus status = 5;
+  CasePriority priority = 6;
+  RiskLevel risk_level = 7;
+  string title = 8;
+  string assigned_to = 9;
+  string created_at = 10;
+  double suspicious_amount = 11;
+  int32 days_open = 12;
+  bool overdue = 13;
+}
+
+message GetCasesByAnalystRequest {
+  string analyst_id = 1;
+  CaseStatus status_filter = 2;
+  int32 page_size = 3;
+  int32 page_token = 4;
+}
+
+message GetCasesByStatusRequest {
+  CaseStatus status = 1;
+  int32 page_size = 2;
+  int32 page_token = 3;
+}
+
+message GetCasesByPriorityRequest {
+  CasePriority priority = 1;
+  int32 page_size = 2;
+  int32 page_token = 3;
+}
+
+// Analytics Requests/Responses
+message GetCaseStatisticsRequest {
+  string date_range_start = 1;
+  string date_range_end = 2;
+  string analyst_id = 3;
+  CaseType case_type = 4;
+}
+
+message CaseStatisticsResponse {
+  int32 total_cases = 1;
+  int32 open_cases = 2;
+  int32 closed_cases = 3;
+  int32 overdue_cases = 4;
+  double average_resolution_time_hours = 5;
+  double sla_compliance_rate = 6;
+  repeated CaseTypeBreakdown case_type_breakdown = 7;
+  repeated RiskLevelBreakdown risk_level_breakdown = 8;
+  repeated AnalystPerformance analyst_performance = 9;
+}
+
+message CaseTypeBreakdown {
+  CaseType case_type = 1;
+  int32 case_count = 2;
+  double percentage = 3;
+  double average_resolution_hours = 4;
+}
+
+message RiskLevelBreakdown {
+  RiskLevel risk_level = 1;
+  int32 case_count = 2;
+  double percentage = 3;
+}
+
+message AnalystPerformance {
+  string analyst_id = 1;
+  int32 cases_assigned = 2;
+  int32 cases_resolved = 3;
+  int32 cases_overdue = 4;
+  double average_resolution_time_hours = 5;
+  double sla_compliance_rate = 6;
+}
+
+// Enums
+enum CaseType {
+  CASE_TYPE_UNSPECIFIED = 0;
+  AML_SCREENING = 1;
+  PEP_SCREENING = 2;
+  SANCTIONS_MATCH = 3;
+  STRUCTURING_PATTERN = 4;
+  SUSPICIOUS_ACTIVITY_REPORT = 5;
+  KYC_EXCEPTION = 6;
+  DOCUMENT_FRAUD = 7;
+  BENEFICIAL_OWNERSHIP = 8;
+  SECURITY_BREACH = 9;
+  PRIVACY_BREACH = 10;
+  REGULATORY_FINE = 11;
+  INTERNAL_AUDIT = 12;
+}
+
+enum CaseStatus {
+  CASE_STATUS_UNSPECIFIED = 0;
+  OPEN = 1;
+  ASSIGNED = 2;
+  IN_PROGRESS = 3;
+  UNDER_REVIEW = 4;
+  ESCALATED = 5;
+  PENDING_APPROVAL = 6;
+  WAITING_EVIDENCE = 7;
+  RESOLVED = 8;
+  CLOSED = 9;
+  CANCELLED = 10;
+}
+
+enum CasePriority {
+  CASE_PRIORITY_UNSPECIFIED = 0;
+  CRITICAL = 1;
+  HIGH = 2;
+  MEDIUM = 3;
+  LOW = 4;
+  ROUTINE = 5;
+}
+
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  VERY_LOW = 1;
+  LOW = 2;
+  MEDIUM = 3;
+  HIGH = 4;
+  CRITICAL = 5;
+}
+
+enum ResolutionType {
+  RESOLUTION_TYPE_UNSPECIFIED = 0;
+  FALSE_POSITIVE = 1;
+  CONFIRMED_VIOLATION = 2;
+  PARTIALLY_CONFIRMED = 3;
+  INCONCLUSIVE = 4;
+  REQUIRES_MORE_INFO = 5;
+  SYSTEM_ERROR = 6;
+  COMPLIANCE_ENHANCEMENT = 7;
+}
+
+enum NoteType {
+  NOTE_TYPE_UNSPECIFIED = 0;
+  INVESTIGATION = 1;
+  EVIDENCE = 2;
+  DECISION = 3;
+  STATUS_CHANGE = 4;
+  ESCALATION = 5;
+  RESOLUTION = 6;
+  GENERAL = 7;
+}
+
+// Additional Message Types
+message AddCaseNoteRequest {
+  string case_id = 1;
+  NoteType note_type = 2;
+  string content = 3;
+  string created_by = 4;
+  bool is_internal = 5;
+}
+
+message AddCaseNoteResponse {
+  string status = 1;
+  string note_id = 2;
+  string created_at = 3;
+}
+
+message ValidationError {
+  string field = 1;
+  string error_code = 2;
+  string message = 3;
+}
