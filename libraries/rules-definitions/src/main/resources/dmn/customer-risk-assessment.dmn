@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dmn:definitions xmlns:dmn="http://www.omg.org/spec/DMN/20180521/MODEL/" xmlns="http://www.omg.org/spec/DMN/20180521/MODEL/" xmlns:feel="http://www.omg.org/spec/DMN/20150725/FEEL/" xmlns:kie="http://www.drools.org/kie/dmn/1.2" xmlns:dmndi="http://www.omg.org/spec/DMN/20180521/DMNDI/" xmlns:di="http://www.omg.org/spec/DMN/20180521/DMNDI/" xmlns:colors="http://www.redhat.com/DMNDI/" xmlns:fittl="http://www.omg.org/spec/FEEL/20180801" id="_customer-risk-assessment" name="Customer Risk Assessment DMN" namespace="https://kiegroup.org/dmn/_customer-risk-assessment" exporter="kie-arc" exporterVersion="7.73.0.Final">
+
+  <dmn:extensionElements/>
+  
+  <dmn drgElement id="risk_assessment_decision" name="Risk Assessment Decision">
+    <dmn:variable id="assessment_result" name="assessment_result" typeRef="RiskAssessment"/>
+  </dmn drgElement>
+  
+  <dmn:decision id="risk_assessment_decision" name="Risk Assessment Decision">
+    <dmn:variable id="assessment_result" name="assessment_result" typeRef="RiskAssessment"/>
+    <dmn:expression id="risk_expression" name="Risk Expression" typeRef="RiskAssessment">
+      <dmn:text>if customer.pep_list_check = "POSITIVE" then 
+  RiskAssessment(risk_level:"CRITICAL", score:1.0, reason:"PEP match detected")
+else if customer.sanctions_check = "POSITIVE" then 
+  RiskAssessment(risk_level:"CRITICAL", score:0.95, reason:"Sanctions match")
+else if customer.transaction_count > 1000 and customer.monthly_amount > 100000 then
+  RiskAssessment(risk_level:"HIGH", score:0.8, reason:"High frequency & volume")
+else if customer.country_risk = "HIGH_RISK" then
+  RiskAssessment(risk_level:"HIGH", score:0.7, reason:"High risk country")
+else if customer.kyd_status = "EXPIRED" then
+  RiskAssessment(risk_level:"MEDIUM", score:0.6, reason:"Expired KYD")
+else if customer.age < 18 then
+  RiskAssessment(risk_level:"MEDIUM", score:0.5, reason:"Minor customer")
+else if customer.industry in ["CASINO", "CRYPTO", "ADULT"] then
+  RiskAssessment(risk_level:"MEDIUM", score:0.4, reason:"High risk industry")
+else RiskAssessment(risk_level:"LOW", score:0.2, reason:"Standard risk customer")</dmn:text>
+    </dmn:expression>
+  </dmn:decision>
+  
+  <dmn drgElement id="aml_monitoring_rules" name="AML Monitoring Rules">
+    <dmn:variable id="monitoring_actions" name="monitoring_actions" typeRef="MonitoringAction"/>
+  </dmn drgElement>
+  
+  <dmn:decision id="aml_monitoring_rules" name="AML Monitoring Rules">
+    <dmn:variable id="monitoring_actions" name="monitoring_actions" typeRef="MonitoringAction"/>
+    <dmn:informationRequirement id="risk_info_req">
+      <dmn:requiredDecision href="#risk_assessment_decision"/>
+    </dmn:informationRequirement>
+    <dmn:informationRequirement id="customer_info_req">
+      <dmn:requiredInput href="#customer_input"/>
+    </dmn:informationRequirement>
+    <dmn:expression id="monitoring_expression" name="Monitoring Expression" typeRef="MonitoringAction">
+      <dmn:text>if risk_assessment_decision.risk_level = "CRITICAL" then 
+  MonitoringAction(action:"IMMEDIATE_BLOCK", frequency:"CONTINUOUS", review_cycle:1)
+else if risk_assessment_decision.risk_level = "HIGH" then
+  MonitoringAction(action:"ENHANCED_MONITORING", frequency:"HOURLY", review_cycle:7)
+else if risk_assessment_decision.risk_level = "MEDIUM" then
+  MonitoringAction(action:"STANDARD_MONITORING", frequency:"DAILY", review_cycle:30)
+else MonitoringAction(action:"BASIC_MONITORING", frequency:"WEEKLY", review_cycle:90)</dmn:text>
+    </dmn:expression>
+  </dmn:decision>
+  
+  <dmn:inputData id="customer_input" name="Customer Input">
+    <dmn:variable id="customer" name="customer" typeRef="CustomerProfile"/>
+  </dmn:inputData>
+  
+  <dmn:itemComponent id="customer_properties" name="Customer Profile Structure">
+    <dmn:itemComponent id="pep_check" name="PEP Check" typeRef="string"/>
+    <dmn:itemComponent id="sanctions_check" name="Sanctions Check" typeRef="string"/>
+    <dmn:itemComponent id="transaction_count" name="Transaction Count" typeRef="number"/>
+    <dmn:itemComponent id="monthly_amount" name="Monthly Amount" typeRef="number"/>
+    <dmn:itemComponent id="country_risk" name="Country Risk" typeRef="string"/>
+    <dmn:itemComponent id="kyd_status" name="KYD Status" typeRef="string"/>
+    <dmn:itemComponent id="age" name="Age" typeRef="number"/>
+    <dmn:itemComponent id="industry" name="Industry" typeRef="string"/>
+  </dmn:itemComponent>
+  
+  <dmn:itemComponent id="risk_assessment_structure" name="Risk Assessment Structure">
+    <dmn:itemComponent id="risk_level" name="Risk Level" typeRef="string"/>
+    <dmn:itemComponent id="score" name="Score" typeRef="number"/>
+    <dmn:itemComponent id="reason" name="Reason" typeRef="string"/>
+    <dmn:itemComponent id="conditions" name="Triggered Conditions" typeRef="string"/>
+    <dmn:itemComponent id="recommendations" name="Recommendations" typeRef="string"/>
+  </dmn:itemComponent>
+  
+  <dmn:itemComponent id="monitoring_action_structure" name="Monitoring Action Structure">
+    <dmn:itemComponent id="action" name="Action" typeRef="string"/>
+    <dmn:itemComponent id="frequency" name="Monitoring Frequency" typeRef="string"/>
+    <dmn:itemComponent id="review_cycle" name="Review Cycle Days" typeRef="number"/>
+    <dmn:itemComponent id="notifications" name="Notifications Required" typeRef="boolean"/>
+    <dmn:itemComponent id="documentation" name="Documentation Required" typeRef="boolean"/>
+  </dmn:itemComponent>
+  
+  <dmn:businessContext>
+    <dmn:businessKnowledgeModel id="compliance_rules" name="Compliance Rules Knowledge">
+      <dmn:variable id="compliance_knowledge" name="compliance_knowledge" typeRef="ComplianceRules"/>
+      <dmn:text>FATF Guidelines for AML/CFT risk assessment</dmn:text>
+      <dmn:text>Basel Committee AML risk factors</dmn:text>
+      <dmn:text>COAF circular guidelines</dmn:text>
+      <dmn:text>BACEN regulations</dmn:text>
+    </dmn:businessKnowledgeModel>
+    
+    <dmn:performanceIndicator id="risk_accuracy_pi" name="Risk Accuracy Performance">
+      <dmn:text>Percentage of risk assessments that correctly identified high-risk customers</dmn:text>
+    </dmn:performanceIndicator>
+    
+    <dmn:organizationUnit id="compliance_team" name="Compliance Team">
+      <dmn:text>Unit responsible for customer risk assessment and AML monitoring</dmn:text>
+    </dmn:organizationUnit>
+  </dmn:businessContext>
+  
+  <dmn:artifact link href="#customer_risk_assessment_process" name="Customer Risk Assessment Process" type="BPMN"/>
+  <dmn:artifact link href="#regulatory_guidelines" name="Regulatory Guidelines Reference" type="RFP"/>
+  
+</dmn:definitions>

@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dmn:definitions xmlns:dmn="http://www.omg.org/spec/DMN/20180521/MODEL/" xmlns="http://www.omg.org/spec/DMN/20180521/MODEL/" xmlns:feel="http://www.omg.org/spec/DMN/20150725/FEEL/" xmlns:kie="http://www.drools.org/kie/dmn/1.2" xmlns:dmndi="http://www.omg.org/spec/DMN/20180521/DMNDI/" xmlns:di="http://www.omg.org/spec/DMN/20180521/DMNDI/" xmlns:colors="http://www.redhat.com/DMNDI/" xmlns:fittl="http://www.omg.org/spec/FEEL/20180801" id="_structuring-detection" name="Structuring Detection DMN" namespace="https://kiegroup.org/dmn/_structuring-detection" exporter="kie-arc" exporterVersion="7.73.0.Final">
+
+  <dmn:extensionElements/>
+  
+  <!-- Main Decision: Detect Structuring Pattern -->
+  <dmn:decision id="structuring_detection_decision" name="Struct Detecting Decision">
+    <dmn:variable id="structuring_result" name="structuring_result" typeRef="StructuringPattern"/>
+    <dmn:informationRequirement id="transaction_history_req">
+      <dmn:requiredInput href="#transaction_history_input"/>
+    </dmn:informationRequirement>
+    <dmn:informationRequirement id="threshold_info_req">
+      <dmn:requiredInput href="#threshold_input"/>
+    </dmn:informationRequirement>
+    
+    <dmn:expression id="structuring_expression" typeRef="StructuringPattern">
+      <dmn:text>if count(current transactions where amount &lt; threshold_input.structuring_threshold) >= threshold_input.suspicious_count then
+  StructuringPattern(
+    pattern_type: "AMOUNT_STRUCTURING",
+    confidence_score: min(1.0, count(current transactions where amount &lt; threshold_input.structuring_threshold) / threshold_input.suspicious_count),
+    reason: "Multiple transactions below structuring threshold",
+    recommended_action: if min(1.0, count(current transactions where amount &lt; threshold_input.structuring_threshold) / threshold_input.suspicious_count) > 0.8 then "IMMEDIATE_REVIEW" else "MONITORING"
+  )
+else if count(current transactions where mod(amount * 1000, 100000) = 0) >= 5 then
+  StructuringPattern(
+    pattern_type: "ROUND_AMOUNTS",
+    confidence_score: min(1.0, count(current transactions where mod(amount * 1000, 100000) = 0) / 10),
+    reason: "Multiple round amount transactions detected",
+    recommended_action: if count(current transactions where mod(amount * 1000, 100000) = 0) >= 8 then "HIGH_PRIORITY_REVIEW" else "STANDARD_REVIEW"
+  )
+else if count(current transactions where transaction_date between date and time("T23:59:59")@P7D ) >= 10 then
+  StructuringPattern(
+    pattern_type: "TIME_BASED_STRUCTURING",
+    confidence_score: min(1.0, count(current transactions where transaction_date between date and time("T23:59:59")@P7D ) / 20),
+    reason: "High frequency transactions in short timeframe",
+    recommended_action: "BEHAVIORAL_ANALYSIS_REQUIRED"
+  )
+else StructuringPattern(
+  pattern_type: "NO_STRUCTURING_DETECTED",
+  confidence_score: 0.0,
+  reason: "No structuring patterns identified",
+  recommended_action: "CONTINUE_MONITORING"
+)</dmn:text>
+    </dmn:expression>
+  </dmn:decision>
+  
+  <!-- Transaction History Input -->
+  <dmn:inputData id="transaction_history_input" name="Transaction History Input">
+    <dmnvariable id="current_transactions" name="current_transactions" typeRef="Transaction[]"/>
+  </dmn:inputData>
+  
+  <!-- Threshold Configuration Input -->
+  <dmn:inputData id="threshold_input" name="Threshold Input">
+    <dmn:variable id="threshold_config" name="threshold_config" typeRef="StructuringThresholds"/>
+  </dmn:inputData>
+  
+  <!-- Thresholds Structure -->
+  <dmn:itemComponent id="structuring_thresholds_structure" name="Structuring Thresholds Structure">
+    <dmn:itemComponent id="structuring_threshold" name="Structuring Amount Threshold" typeRef="number"/>
+    <dmn:itemComponent id="suspicious_count" name="Suspicious Transaction Count" typeRef="number"/>
+    <dmn:itemComponent id="time_window_days" name="Analysis Time Window Days" typeRef="number"/>
+    <dmn:itemComponent id="min_transaction_gap_minutes" name="Minimum Transaction Gap Minutes" typeRef="number"/>
+    <dmn:itemComponent id="daily_amount_threshold" name="Daily Amount Threshold" typeRef="number"/>
+  </dmn:itemComponent>
+  
+  <!-- Transaction Structure -->
+  <dmn:itemComponent id="transaction_structure" name="Transaction Structure">
+    <dmn:itemComponent id="transaction_id" name="Transaction ID" typeRef="string"/>
+    <dmn:itemComponent id="customer_id" name="Customer ID" typeRef="string"/>
+    <dmn:itemComponent id="amount" name="Amount" typeRef="number"/>
+    <dmn:itemComponent id="currency" name="Currency" typeRef="string"/>
+    <dmn:itemComponent id="transaction_date" name="Transaction Date" typeRef="dateTime"/>
+    <dmn:itemComponent id="transaction_type" name="Transaction Type" typeRef="string"/>
+    <dmn:itemComponent id="counterparty_account" name="Counterparty Account" typeRef="string"/>
+    <dmn:itemComponent id="channel" name="Channel" typeRef="string"/>
+  </dmn:itemComponent>
+  
+  <!-- Structuring Pattern Result Structure -->
+  <dmn:itemComponent id="structuring_pattern_structure" name="Struct Patt Structure">
+    <dmn:itemComponent id="pattern_type" name="Pattern Type" typeRef="string"/>
+    <dmn:itemComponent id="confidence_score" name="Confidence Score" typeRef="number"/>
+    <dmn:itemComponent id="reason" name="Detection Reason" typeRef="string"/>
+    <dmn:itemComponent id="recommended_action" name="Recommended Action" typeRef="string"/>
+    <dmn:itemComponent id="flagged_transactions" name="Flagged Transactions" typeRef="string"/>
+    <dmn:itemComponent id="total_structured_amount" name="Total Structured Amount" typeRef="number"/>
+    <dmn:itemComponent id="time_span" name="Time Span" typeRef="string"/>
+    <dmn:itemComponent id="requires_sar_filling" name="Requires SAR Filing" typeRef="boolean"/>
+  </dmn:itemComponent>
+  
+  <!-- Additional Decision: Calculate Structuring Metrics -->
+  <dmn:decision id="structuring_metrics_decision" name="Structuring Metrics Decision">
+    <dmn:variable id="metrics" name="metrics" typeRef="StructuringMetrics"/>
+    <dmn:informationRequirement id="pattern_info_req">
+      <dmn:requiredDetermination href="#structuring_detection_decision"/>
+    </dmn:informationRequirement>
+    <dmn:informationRequirement id="tx_history_info_req">
+      <dmn:requiredInput href="#transaction_history_input"/>
+    </dmn:informationRequirement>
+    
+    <dmn:expression id="metrics_expression" typeRef="StructuringMetrics">
+      <dmn:text>StructuringMetrics(
+    pattern_confidence: structuring_detection_decision.confidence_score,
+    transaction_count: count(current_transactions),
+    amount_variability: calculate_amount_variability(current_transactions),
+    time_clustering_score: calculate_time_clustering(current_transactions),
+    counterparty_diversity: count(distinct current_transactions, counterparty_account),
+    risk_score: min(1.0, structuring_detection_decision.confidence_score + 
+                    (count(current_transactions) / 20) + 
+                    (calculate_amount_variability(current_transactions) / 100)),
+    sar_threshold_breached: total_amount(current_transactions) > 10000 and 
+                            count(current_transactions) >= 5,
+    suspicion_level: if confidence_score > 0.8 then "HIGH" else 
+                     if confidence_score > 0.5 then "MEDIUM" else "LOW"
+  )</dmn:text>
+    </dmn:expression>
+  </dmn:decision>
+  
+  <!-- Structuring Metrics Structure -->
+  <dmn:itemComponent id="structuring_metrics_structure" name="Structuring Metrics Structure">
+    <dmn:itemComponent id="pattern_confidence" name="Pattern Confidence" typeRef="number"/>
+    <dmn:itemComponent id="transaction_count" name="Transaction Count" typeRef="number"/>
+    <dmn:itemComponent id="amount_variability" name="Amount Variability" typeRef="number"/>
+    <dmn:itemComponent id="time_clustering_score" name="Time Clustering Score" typeRef="number"/>
+    <dmn:itemComponent id="counterparty_diversity" name="Counterparty Diversity" typeRef="number"/>
+    <dmn:itemComponent id="risk_score" name="Overall Risk Score" typeRef="number"/>
+    <dmn:itemComponent id="sar_threshold_breached" name="SAR Threshold Breached" typeRef="boolean"/>
+    <dmn:itemComponent id="suspicion_level" name="Suspicion Level" typeRef="string"/>
+  </dmn:itemComponent>
+  
+  <!-- Business Knowledge Model: FATF Guidelines -->
+  <dmn:businessKnowledgeModel id="fatf_guidelines" name="FATF Structuring Guidelines">
+    <dmn:variable id="fatf_rules" name="fatf_rules" typeRef="FATFGuidelines"/>
+    
+    <dmn:text>
+      FATF Recommendation 15: Financial institutions should report cash transactions above designated thresholds
+      
+      FATF Recommendation 20: Requirements for reporting of suspicious transactions
+      
+      Structuring Patterns to Monitor:
+      1. Breaking down amounts to avoid reporting thresholds
+      2. Frequent transactions just below reporting limits  
+      3. Coordination between accounts to structure transactions
+      4. Use of multiple channels to avoid detection
+      5. Rapid successive transactions
+      
+      Red Flags for Structuring:
+      - Multiple transactions below threshold in short timeframe
+      - Round number amounts (accounting for fees)
+      - Unusual transaction patterns vs. customer profile
+      - Transactions across multiple branches/channels
+      - Coordination patterns between accounts
+    </dmn:text>
+    
+    <dmn:text>
+      COAF Brazil Structuring Indicators:
+      - Transactions totaling over R$ 10,000 in 24h across multiple transactions
+      - More than 5 transactions below threshold per day
+      - Same customer using multiple branches/channels same day
+      - Coordination patterns between accounts
+    </dmn:text>
+    
+  </dmn:businessKnowledgeModel>
+  
+  <!-- Performance Indicators -->
+  <dmn:performanceIndicator id="structuring_detection_accuracy" name="Structuring Detection Accuracy">
+    <dmn:text>Percentage of structuring patterns correctly identified vs. false positives</dmn:text>
+  </dmn:performanceIndicator>
+  
+  <dmn:performanceIndicator id="sar_submission_rate" name="SAR Submission Rate">
+    <dmn:text>Percentage of detected structuring cases that resulted in SAR filings</dmn:text>
+  </dmn:performanceIndicator>
+  
+  <dmn:outputValues>
+    <dmn:text>Regulatory Threshold Indicators</dmn:text>
+    <dmn:text>Pattern Confidence Levels (0.0 - 1.0)</dmn:text>
+    <dmn:text>Recommended Actions (MONITOR, REVIEW, INVESTIGATE)</dmn:text>
+    <dmn:text>SAR Filing Requirements</dmn:text>
+  </dmn:outputValues>
+  
+  <!-- Business Context -->
+  <dmn:businessContext>
+    <dmn:organizationUnit id="aml_compliance_team" name="AML Compliance Team">
+      <dmn:text>Team responsible for structuring detection and SAR filing</dmn:text>
+    </dmn:organizationUnit>
+    
+    <dmn:performanceIndicator id="false_positive_rate" name="False Positive Rate">
+      <dmn:text>Percentage of structuring alerts that turned out to be legitimate business</dmn:text>
+    </dmn:performanceIndicator>
+  </dmn:businessContext>
+  
+</dmn:definitions>
