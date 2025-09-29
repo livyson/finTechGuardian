@@ -1,0 +1,1 @@
+# Configurações Kafka Streams otimizadas
