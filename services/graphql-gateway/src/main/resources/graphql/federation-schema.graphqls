@@ -1,0 +1,293 @@
+type Query {
+  # Compliance Queries - Federated from compliance-service
+  complianceCases(filter: ComplianceCaseFilter): [ComplianceCase!]!
+  complianceCase(id: ID!): ComplianceCase
+  
+  # Risk Assessment Queries - Federated from risk-engine-service
+  riskAssessments(filter: RiskAssessmentFilter): [RiskAssessment!]!
+  riskAssessment(id: ID!): RiskAssessment
+  
+  # Transaction Queries - Federated from transaction-service
+  transactions(filter: TransactionFilter): [Transaction!]!
+  transaction(id: ID!): Transaction
+  
+  # Customer Queries - Federated from customer-service
+  customers(filter: CustomerFilter): [Customer!]!
+  customer(id: ID!): Customer
+  
+  # Federated queries that span multiple services
+  customerRiskOverview(customerId: ID!): CustomerRiskOverview
+  transactionComplianceOverview(transactionId: ID!): TransactionComplianceOverview
+}
+
+# Compliance Cases from compliance-service
+type ComplianceCase @key(fields: "id") {
+  id: ID!
+  title: String!
+  description: String
+  status: ComplianceStatus!
+  priority: Priority!
+  riskLevel: RiskLevel!
+  customer: Customer @provides(fields: "id")
+  transactions: [Transaction!] @provides(fields: "id")
+  riskAssessment: RiskAssessment @provides(fields: "id")
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  assignedTo: String
+  evidence: [Evidence!]!
+  auditTrail: [AuditEvent!]!
+}
+
+# Risk Assessments from risk-engine-service
+type RiskAssessment @key(fields: "id") {
+  id: ID!
+  entityId: ID!
+  entityType: EntityType!
+  riskScore: Float!
+  riskLevel: RiskLevel!
+  factors: [RiskFactor!]!
+  modelVersion: String!
+  confidence: Float!
+  customer: Customer @external
+  createdAt: DateTime!
+  expiresAt: DateTime
+}
+
+# Transactions from transaction-service
+type Transaction @key(fields: "id") {
+  id: ID!
+  customerId: ID!
+  amount: Float!
+  currency: String!
+  type: TransactionType!
+  status: TransactionStatus!
+  originCountry: String
+  destinationCountry: String
+  description: String
+  customer: Customer @external
+  complianceCase: ComplianceCase @external
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  metadata: JSON
+}
+
+# Customers from customer-service
+type Customer @key(fields: "id") {
+  id: ID!
+  documentNumber: String!
+  name: String!
+  email: String
+  customerType: CustomerType!
+  riskLevel: RiskLevel!
+  status: CustomerStatus!
+  transactions: [Transaction!] @external
+  complianceCases: [ComplianceCase!] @external
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+# Federated Aggregate Types
+type CustomerRiskOverview {
+  customer: Customer!
+  riskScore: Float!
+  riskLevel: RiskLevel!
+  activeComplianceCases: [ComplianceCase!]!
+  recentTransactions: [Transaction!]!
+  riskTrends: RiskTrend!
+  alertLevel: AlertLevel!
+}
+
+type TransactionComplianceOverview {
+  transaction: Transaction!
+  riskScore: Float!
+  complianceFlags: [ComplianceFlag!]!
+  relatedCases: [ComplianceCase!]!
+  screeningResults: ScreeningResult!
+}
+
+# Supporting Types
+type RiskFactor {
+  name: String!
+  weight: Float!
+  value: Float!
+  impact: FactorImpact!
+}
+
+type Evidence {
+  id: ID!
+  type: EvidenceType!
+  content: String!
+  metadata: JSON
+  createdAt: DateTime!
+}
+
+type AuditEvent {
+  id: ID!
+  action: String!
+  userId: String!
+  timestamp: DateTime!
+  details: JSON
+}
+
+type RiskTrend {
+  changePercent: Float!
+  trend: TrendDirection!
+  timeframe: String!
+}
+
+type ComplianceFlag {
+  flagType: String!
+  severity: FlagSeverity!
+  description: String!
+  ruleId: String!
+}
+
+type ScreeningResult {
+  sanctions: Boolean!
+  pep: Boolean!
+  amlRisk: AMLResult!
+}
+
+# Enums
+enum ComplianceStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  ESCALATED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EntityType {
+  CUSTOMER
+  TRANSACTION
+  ACCOUNT
+  MERCHANT
+}
+
+enum TransactionType {
+  TRANSFER
+  PAYMENT
+  WITHDRAWAL
+  DEPOSIT
+  EXCHANGE
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  BLOCKED
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  CORPORATE
+  GOVERNMENT
+  NON_PROFIT
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  PENDING_VERIFICATION
+  BLOCKED
+  SUSPENDED
+}
+
+enum FactorImpact {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+enum EvidenceType {
+  DOCUMENT
+  SCREENSHOT
+  LOG_ENTRY
+  THIRD_PARTY_DATA
+}
+
+enum TrendDirection {
+  RISING
+  FALLING
+  STABLE
+}
+
+enum FlagSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum AlertLevel {
+  GREEN
+  YELLOW
+  ORANGE
+  RED
+}
+
+enum AMLResult {
+  CLEAN
+  SUSPICIOUS
+  HIGH_RISK
+}
+
+# Filters for queries
+input ComplianceCaseFilter {
+  status: ComplianceStatus
+  priority: Priority
+  riskLevel: RiskLevel
+  assignedTo: String
+  createdAfter: DateTime
+  createdBefore: DateTime
+}
+
+input RiskAssessmentFilter {
+  entityType: EntityType
+  riskLevel: RiskLevel
+  modelVersion: String
+  createdAfter: DateTime
+}
+
+input TransactionFilter {
+  customerId: ID
+  type: TransactionType
+  status: TransactionStatus
+  minAmount: Float
+  maxAmount: Float
+  currency: String
+  dateRange: DateRangeInput
+}
+
+input CustomerFilter {
+  customerType: CustomerType
+  status: CustomerStatus
+  riskLevel: RiskLevel
+  documentNumber: String
+}
+
+input DateRangeInput {
+  start: DateTime!
+  end: DateTime!
+}
+
+# Scalars
+scalar DateTime
+scalar JSON
