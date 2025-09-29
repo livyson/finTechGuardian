@@ -1,0 +1,207 @@
+server:
+  port: 8082
+  servlet:
+    context-path: /api/transaction-monitoring
+
+spring:
+  application:
+    name: transaction-monitoring-service
+
+  profiles:
+    active: kafka-streams
+
+  # Datasource Configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fintechguardian_transactions
+    username: ${DB_USERNAME:fintechguardian}
+    password: ${DB_PASSWORD:fintechguardian123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 25
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+
+  # MongoDB Configuration
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/fintechguardian_transaction_metadata
+      auto-index-creation: true
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    
+    # Consumer Configuration
+    consumer:
+      group-id: transaction-monitoring-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.fintechguardian.common.domain.events,com.fintechguardian.transactionmonitoring.entity"
+        spring.json.type.mapping: "com.fintechguardian.common.domain.events.TransactionEvent"
+    
+    # Producer Configuration  
+    producer:
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  # Kafka Streams Configuration
+  cloud:
+    stream:
+      kafka-streams:
+        binder:
+          brokers: localhost:9092
+          configuration:
+            application.id: transaction-monitoring-streams
+            bootstrap.servers: localhost:9092
+            default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+            default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+            commit.interval.ms: 1000
+            auto.offset.reset: earliest
+            processing.guarantee: exactly_once_v2
+          serde:
+            type: json
+            trustedPackages: "com.fintechguardian.transactionmonitoring.entity,com.fintechguardian.common.domain.events"
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,streams
+  endpoint:
+    health:
+      show-details: when-authorized
+    streams:
+      enabled: true
+
+# Application-specific configuration
+transaction-monitoring:
+  # Risk thresholds
+  risk-thresholds:
+    high-value-threshold: 50000
+    suspicious-pattern-threshold: 0.7
+    rapid-sequence-threshold-minutes: 5
+    structuring-amount-threshold: 100000
+  
+  # Analysis windows
+  analysis-windows:
+    customer-aggregation-minutes: 60
+    international-pattern-minutes: 5
+    p2p-analysis-minutes: 15
+    behavioral-analysis-minutes: 1440 # 24 hours
+  
+  # Processing limits
+  processing-limits:
+    max-concurrent-analyses: 100
+    batch-size: 50
+    alert-rate-limit-per-minute: 100
+  
+  # Integration endpoints
+  integration:
+    risk-engine-service: http://localhost:8084/api/risk-engine
+    customer-profile-service: http://localhost:8081/api/customer-profile
+    compliance-case-service: http://localhost:8083/api/compliance-case
+  
+  # Real-time features
+  real-time:
+    websocket-enabled: true
+    websocket-path: /ws/transaction-monitoring
+    enable-push-notifications: true
+    
+  # Topics configuration
+  topics:
+    transaction-events: transaction-events
+    transaction-alerts: transaction-alerts
+    investigation-requests: investigation-requests
+    compliance-cases: compliance-cases
+    customer-reviews: customer-reviews
+    analyzed-transactions: analyzed-transactions
+
+# Logging configuration
+logging:
+  level:
+    com.fintechguardian.transactionmonitoring: DEBUG
+    org.springframework.kafka: INFO
+    org.apache.kafka.streams: INFO
+    org.apache.kafka.clients: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# Monitoring configuration
+monitoring:
+  prometheus:
+    enabled: true
+    path: /actuator/prometheus
+  
+  jaeger:
+    enabled: true
+    endpoint: http://localhost:14268/api/traces
+  
+  elasticsearch:
+    enabled: true
+    hosts: ["localhost:9200"]
+    index-pattern: "transaction-monitoring-*"
+
+---
+
+# Profile específico para Kafka Streams
+spring:
+  config:
+    activate:
+      on-profile: kafka-streams
+  
+  cloud:
+    stream:
+      bindings:
+        # Input binding para eventos de transação
+        transaction-event-input:
+          destination: transaction-events
+          consumer:
+            concurrency: 3
+            max-attempts: 3
+            backoff-initial-interval: 1000
+            backoff-max-interval: 10000
+            backoff-multiplier: 2.0
+        
+        # Output bindings para diferentes tipos de resultado
+        transaction-alert-output:
+          destination: transaction-alerts
+          producer:
+            order-key: customer_id
+        
+        investigation-output:
+          destination: investigation-requests
+          
+        compliance-case-output:
+          destination: compliance-cases
+          
+        customer-review-output:
+          destination: customer-reviews
+          
+        analyzed-transaction-output:
+          destination: analyzed-transactions
