@@ -1,0 +1,297 @@
+package com.fintechguardian.riskengine.rules
+
+import com.fintechguardian.riskengine.entity.RiskAssessment
+import com.fintechguardian.riskengine.entity.RiskFactor
+import com.fintechguardian.common.domain.enums.RiskLevel
+import java.math.BigDecimal
+import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
+
+// Regras AML (Anti-Money Laundering) para detecção de lavagem de dinheiro
+// Estas regras são executadas pelo motor Drools para análise de risco em tempo real
+
+rule "High Value Transaction - Money Laundering Risk"
+    when
+        $factor : RiskFactor(
+            type == RiskFactor.FactorType.TRANSACTION_AMOUNT,
+            value >= 100000L // R$ 100.000
+        )
+        $assessment : RiskAssessment(riskScore < 0.7) // Score ainda baixo
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.3"))),
+            setStatus(RiskAssessment.AssessmentStatus.MANUAL_REVIEW_REQUIRED),
+            setRequiresManualReview(true),
+            setRulesFired("High Value Transaction Alert: Amount >= " + $factor.getValue())
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.SUSPICIOUS_PATTERN,
+            "HIGH_VALUE_TRANSACTION_ML_RISK",
+            new BigDecimal("0.3"),
+            "Transação de alto valor potencialmente suspeita"
+        ));
+end
+
+rule "Multiple Round Number Transactions - Structuring"
+    when
+        $factors : List(size >= 3) from collect(
+            RiskFactor(
+                type == RiskFactor.FactorType.TRANSACTION_AMOUNT,
+                value % 1000 == 0 // Transações com valores redondos (1000, 2000, etc)
+            )
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.25"))),
+            setRequiresManualReview(true),
+            setRulesFired("Multiple round transaction structuring detected: " + $factors.size() + " transactions")
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.SUSPICIOUS_PATTERN,
+            "ROUND_NUMBER_STRUCTURING",
+            new BigDecimal("0.25"),
+            "Possível estruturação com valores redondos"
+        ));
+end
+
+rule "Rapid Successive Transactions - Smurfing"
+    when
+        $factors : List(size >= 5) from collect(
+            RiskFactor(
+                type == RiskFactor.FactorType.TRANSACTION_FREQUENCY,
+                value <= 60 // Menos de 60 segundos entre transações
+            )
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.35"))),
+            setRequiresManualReview(true),
+            setRulesFired("Rapid successive transactions smurfing: " + $factors.size() + " transactions")
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.SUSPICIOUS_PATTERN,
+            "SMURFING_DETECTED",
+            new BigDecimal("0.35"),
+            "Possível smurfing com múltiplas transações rapidas"
+        ));
+end
+
+rule "PEP with High Risk Transaction"
+    when
+        $pepFactor : RiskFactor(
+            type == RiskFactor.FactorType.PEP_STATUS,
+            booleanValue == true
+        )
+        $transactionFactor : RiskFactor(
+            type == RiskFactor.FactorType.TRANSACTION_AMOUNT,
+            value >= 50000L // R$ 50.000 para PEPs
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.4"))),
+            setRequiresManualReview(true),
+            setRulesFired("PEP with high amount transaction: PEP + Amount >= " + $transactionFactor.getValue())
+        )
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.COMPLIANCE_RISK,
+            "PEP_HIGH_VALUE_TRANSACTION",
+            new BigDecimal("0.4"),
+            "PEP com transação de alto valor"
+        ));
+end
+
+rule "Sanctioned Country Geographic Risk"
+    when
+        $geoFactor : RiskFactor(
+            type == RiskFactor.FactorType.GEOGRAPHIC_RISK,
+            countryValue memberOf java.util.List.of("IR", "KP", "SY", "CU", "VE") // Países sancionados
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.5"))),
+            setRequiresManualReview(true),
+            setRulesFired("Sanctioned country transaction: " + $geoFactor.getCountryValue())
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.SANCTIONS_RISK,
+            "SANCTIONED_COUNTRY",
+            new BigDecimal("0.5"),
+            "Transação envolvendo país sancionado"
+        ));
+end
+
+rule "Cash Withdrawal Pattern - Structuring"
+    when
+        $withdrawalCount : Number(intValue >= 3) from accumulate(
+            RiskFactor(
+                type == RiskFactor.FactorType.TRANSACTION_TYPE,
+                stringValue == "CASH_WITHDRAWAL"
+            ),
+            count($this)
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.2"))),
+            setRequiresManualReview(true),
+            setRulesFired("Multiple cash withdrawals: " + $withdrawalCount.intValue() + " withdrawals")
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.SUSPICIOUS_PATTERN,
+            "MULTIPLE_CASH_WITHDRAWALS",
+            new BigDecimal("0.2"),
+            "Múltiplos saques em dinheiro"
+        ));
+end
+
+rule "Weekend/Holiday High Value Transactions"
+    when
+        $timeFactor : RiskFactor(
+            type == RiskFactor.FactorType.TRANSACTION_TIMING,
+            booleanValue == true // Transação fora do horário comercial
+        )
+        $amountFactor : RiskFactor(
+            type == RiskFactor.FactorType.TRANSACTION_AMOUNT,
+            value >= 25000L
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.15"))),
+            setRequiresManualReview(riskScore.add(new BigDecimal("0.15")).compareTo(new BigDecimal("0.7")) >= 0),
+            setRulesFired("High value transaction outside business hours: Amount = " + $amountFactor.getValue())
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.TIMING_RISK,
+            "AFTER_HOURS_HIGH_VALUE",
+            new BigDecimal("0.15"),
+            "Transação de alto valor fora do horário comercial"
+        ));
+end
+
+rule "Cross-Border Transaction with High Friction"
+    when
+        $crossBorder : RiskFactor(
+            type == RiskFactor.FactorType.GEOGRAPHIC_RISK,
+            booleanValue == true // Transação cross-border
+        )
+        $frictionFactor : RiskFactor(
+            type == RiskFactor.FactorType.TRANSACTION_FRICTION,
+            value <= 100 // Baixa fricção (tempo processamento muito rápido)
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.3"))),
+            setRequiresManualReview(true),
+            setRulesFired("Cross-border with suspicious timing: Friction = " + $frictionFactor.getValue())
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.SUSPICIOUS_PATTERN,
+            "CROSS_BORDER_LOW_FRICTION",
+            new BigDecimal("0.3"),
+            "Transação internacional com baixo tempo de processamento"
+        ));
+end
+
+rule "Customer Age vs Transaction Sophistication"
+    when
+        $ageFactor : RiskFactor(
+            type == RiskFactor.FactorType.CUSTOMER_AGE,
+            value < 25 // Cliente jovem
+        )
+        $sophisticationFactor : RiskFactor(
+            type == RiskFactor.FactorType.TRANSACTION_SOPHISTICATION,
+            value >= 3 // Transação muito sofisticada (escala 1-5)
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.2"))),
+            setRequiresManualReview(riskScore.add(new BigDecimal("0.2")).compareTo(new BigDecimal("0.6")) >= 0),
+            setRulesFired("Young customer with sophisticated transaction: Age = " + $ageFactor.getValue())
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.BEHAVIORAL_RISK,
+            "YOUNG_CUSTOMER_SOPHISTICATED",
+            new BigDecimal("0.2"),
+            "Cliente jovem com transacao sofisticada"
+        ));
+end
+
+rule "Beneficiary in High Risk Jurisdiction"
+    when
+        $beneficiary : RiskFactor(
+            type == RiskFactor.FactorType.BENEFICIARY_REGION,
+            countryValue memberOf java.util.List.of("PA", "CY", "MT", "LB") // Jurisdições de alto risco
+        )
+        $amountFactor : RiskFactor(
+            type == RiskFactor.FactorType.TRANSACTION_AMOUNT,
+            value >= 15000L
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskScore(riskScore.add(new BigDecimal("0.25"))),
+            setRequiresManualReview(riskScore.add(new BigDecimal("0.25")).compareTo(new BigDecimal("0.6")) >= 0),
+            setRulesFired("High risk jurisdiction beneficiary: " + $beneficiary.getCountryValue())
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.JURISDICTION_RISK,
+            "HIGH_RISK_JURISDICTION_BENEFICIARY",
+            new BigDecimal("0.25"),
+            "Beneficiário em jurisdição de alto risco"
+        ));
+end
+
+// Agregado de risco baseado em múltiplos fatores
+rule "High Risk Aggregation"
+    when
+        $totalRisk : Number(doubleValue >= 0.8) from accumulate(
+            RiskFactor($score : score),
+            sum($score)
+        )
+        $assessment : RiskAssessment()
+    then
+        modify($assessment) {
+            setRiskLevel(RiskLevel.CRITICAL),
+            setAutoRejected(true),
+            setRequiresManualReview(true),
+            setRulesFired("High risk aggregation: Total score = " + $totalRisk.doubleValue())
+        }
+        insertLogical(new RiskFactor(
+            RiskFactor.FactorType.AGGREGATED_RISK,
+            "HIGH_RISK_AGGREGATION",
+            BigDecimal.valueOf($totalRisk.doubleValue()),
+            "Risco crítico agregado"
+        ));
+end
+
+// Regra para definir níveis de risco baseado no score final
+rule "Risk Level Classification"
+    when
+        $assessment : RiskAssessment(riskScore >= BigDecimal.ZERO)
+    then
+        RiskLevel riskLevel;
+        if ($assessment.getRiskScore().compareTo(new BigDecimal("0.8")) >= 0) {
+            riskLevel = RiskLevel.CRITICAL;
+        } else if ($assessment.getRiskScore().compareTo(new BigDecimal("0.6")) >= 0) {
+            riskLevel = RiskLevel.HIGH;
+        } else if ($assessment.getRiskScore().compareTo(new BigDecimal("0.4")) >= 0) {
+            riskLevel = RiskLevel.MEDIUM;
+        } else if ($assessment.getRiskScore().compareTo(new BigDecimal("0.2")) >= 0) {
+            riskLevel = RiskLevel.LOW;
+        } else {
+            riskLevel = RiskLevel.VERY_LOW;
+        }
+        
+        modify($assessment) {
+            setRiskLevel(riskLevel),
+            setAutoApproved(riskLevel.compareTo(RiskLevel.MEDIUM) <= 0 && !requiresManualReview),
+            setProcessedAt(LocalDateTime.now())
+        }
+end

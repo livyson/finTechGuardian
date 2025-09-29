@@ -1,0 +1,211 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: risk-engine-service
+  
+  profiles:
+    active: dev
+  
+  # Threading virtual do Java 23 para máximo desempenho no motor de regras
+  threads:
+    virtual:
+      enabled: true
+  
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:fintechguardian}
+    username: ${DB_USERNAME:fintech_user}
+    password: ${DB_PASSWORD:fintech_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 25 # Pool maior para processamento de regras
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
+        batch_size: 50
+    open-in-view: false
+  
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_HOSTS:localhost:9092}
+    consumer:
+      group-id: risk-engine-consumer
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.fintechguardian.*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# Drools Configuration
+risk-engine:
+  drools:
+    rules-directory: "src/main/resources/rules"
+    reload-enabled: true
+    hot-reload: true
+    
+  # Risk Assessment Configuration
+  assessment:
+    quick-evaluation-threshold: 5000 # R$ 5.000 para avaliação rápida
+    high-risk-threshold: 0.6          # 60% de score = alto risco
+    critical-risk-threshold: 0.8      # 80% de score = risco crítico
+    
+  # Performance Configuration
+  performance:
+    max-processing-time-ms: 30000     # 30 segundos max por avaliação
+    parallel-evaluations: 10          # Máximo 10 avaliações paralelas
+    cache-enabled: true
+    cache-ttl-seconds: 300           # Cache de 5 minutos
+
+# Logging Configuration
+logging:
+  level:
+    com.fintechguardian: ${LOG_LEVEL:INFO}
+    org.kie: ${DROOLS_LOG_LEVEL:WARN}
+    org.drools: ${DROOLS_LOG_LEVEL:WARN}
+    org.springframework.transaction: WARN
+    
+patterns:
+  console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
+
+# Security Configuration
+security:
+  oauth2:
+    resourceserver:
+      jwt:
+        issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8080/oauth2/jwks}
+
+# External APIs Configuration para coleta de fatores de risco
+external:
+  sanctions-api:
+    url: ${SANCTIONS_API_URL:https://sanctions-screening.com/api/v1}
+    api-key: ${SANCTIONS_API_KEY:your-sanctions-api-key}
+    timeout: 10000
+    
+  pep-api:
+    url: ${PEP_API_URL:https://pep-screening.com/api/v1}
+    api-key: ${PEP_API_KEY:your-pep-api-key}
+    timeout: 15000
+    
+  geo-risk-api:
+    url: ${GEO_RISK_API_URL:https://geo-risk.com/api/v1}
+    api-key: ${GEO_RISK_API_KEY:your-geo-risk-api-key}
+    timeout: 5000
+
+# Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,beans,configprops,scheduledtasks
+      base-path: /actuator
+  
+  endpoint:
+    health:
+      show-details: when-authorized
+      
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    
+  # Métricas específicas do Risk Engine
+  custom:
+    risk-assessments:
+      enabled: true
+    drools-performance:
+      enabled: true
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    display-request-duration: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+# Production Configuration
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+
+logging:
+  level:
+    com.fintechguardian: INFO
+    org.kie: WARN
+    org.drools: ERROR
+
+risk-engine:
+  performance:
+    max-processing-time-ms: 15000    # 15 segundos em produção
+    cache-ttl-seconds: 600          # Cache de 10 minutos
+  
+  assessment:
+    # Thresholds mais rigorosos em produção
+    high-risk-threshold: 0.5
+    critical-risk-threshold: 0.7
+
+external:
+  sanctions-api:
+    timeout: 5000
+  pep-api:
+    timeout: 8000
+  geo-risk-api:
+    timeout: 3000
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+
+# Test Configuration
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+    
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+logging:
+  level:
+    com.fintechguardian: DEBUG
+    org.kie: DEBUG
+    org.drools: DEBUG
+
+risk-engine:
+  drools:
+    hot-reload: false  # Desabilitar hot reload em testes
+  performance:
+    max-processing-time-ms: 5000    # 5 segundos para testes
