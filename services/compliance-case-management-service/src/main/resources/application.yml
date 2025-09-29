@@ -1,0 +1,254 @@
+server:
+  port: 8083
+  servlet:
+    context-path: /api/compliance-case
+
+spring:
+  application:
+    name: compliance-case-management-service
+
+  profiles:
+    active: camunda
+
+  # Datasource Configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fintechguardian_compliance
+    username: ${DB_USERNAME:fintechguardian}
+    password: ${DB_PASSWORD:fintechguardian123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 25
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+
+  # MongoDB Configuration for documents and attachments
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/fintechguardian_compliance_docs
+      auto-index-creation: true
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: compliance-case-management-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.fintechguardian.compliancecase.entity,com.fintechguardian.common.domain.events"
+    producer:
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  # Mail Configuration
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# Camunda Configuration
+camunda:
+  bpm:
+    # Database configuration for Camunda
+    database:
+      schema-update: true
+      type: postgres
+    # Admin user configuration
+    admin-user:
+      id: admin
+      password: AdminPassword123
+      firstName: Admin
+      lastName: User
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,camunda
+  endpoint:
+    health:
+      show-details: when-authorized
+    camunda:
+      enabled: true
+
+# Application-specific configuration
+compliance-case-management:
+  # Workflow configuration
+  workflows:
+    aml-investigation-workflow: aml-investigation-workflow
+    sar-filing-workflow: sar-filing-workflow
+    kyc-exception-workflow: kyc-exception-workflow
+    
+  # SLA configuration by priority
+  sla-hours:
+    CRITICAL: 4
+    HIGH: 8
+    MEDIUM: 24
+    LOW: 72
+    ROUTINE: 168 # 7 days
+    
+  # Notification configuration
+  notifications:
+    email-enabled: true
+    sms-enabled: false
+    escalation-recipients: ["compliance-officer@fintechguardian.com", "risk-manager@fintechguardian.com"]
+    
+  # File storage configuration
+  file-storage:
+    max-file-size: 50MB
+    allowed-extensions: ["pdf", "doc", "docx", "jpg", "jpeg", "png", "xlsx", "csv"]
+    storage-path: ${FILE_STORAGE_PATH:/tmp/compliance-case-files}
+    s three-enabled: false
+    s3-bucket: fintechguardian-compliance-files
+  
+  # Integration endpoints
+  integration:
+    transaction-monitoring-service: http://localhost:8082/api/transaction-monitoring
+    customer-profile-service: http://localhost:8081/api/customer-profile
+    risk-engine-service: http://localhost:8084/api/risk-engine
+    regulatory-reporting-service: http://localhost:8085/api/regulatory-reported
+  
+  # Topics configuration
+  topics:
+    compliance-cases: compliance-cases
+    compliance-cases-updates: compliance-cases-updates
+    compliance-notifications: compliance-notifications
+    case-workflow-events: case-workflow-events
+    sar-filing-requests: sar-filing-requests
+    external-investigation-requests: external-investigation-requests
+    
+  # Report generation configuration
+  reporting:
+    template-path: classpath:/templates/
+    output-path: ${REPORT_OUTPUT_PATH:/tmp/compliance-reports}
+    retention-days: 2555 # 7 years
+    
+  # Security configuration
+  security:
+    confidentiality-levels: ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "SECRET"]
+    data-classification-enabled: true
+    encryption-enabled: true
+    
+  # Performance configuration
+  performance:
+    max-concurrent-workflows: 100
+    workflow-timeout-hours: 168 # 7 days
+    batch-size: 50
+    
+  # Audit configuration
+  audit:
+    enabled: true
+    log-all-actions: true
+    retention-period-days: 2555 # 7 years
+    
+  # Automated actions configuration
+  automated-actions:
+    enable-customer-blocking: true
+    enable-transaction-freeze: true
+    enable-enhanced-monitoring: true
+    enable-notification-sending: true
+
+# Logging configuration
+logging:
+  level:
+    com.fintechguardian.compliancecase: DEBUG
+    org.camunda.bpm: INFO
+    org.springframework.kafka: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# Monitoring configuration
+monitoring:
+  prometheus:
+    enabled: true
+    path: /actuator/prometheus
+  
+  jaeger:
+    enabled: true
+    endpoint: http://localhost:14268/api/traces
+  
+  elasticsearch:
+    enabled: true
+    hosts: ["localhost:9200"]
+    index-pattern: "compliance-case-*"
+
+---
+
+# Profile específico para Camunda
+spring:
+  config:
+    activate:
+      on-profile: camunda
+  
+  # Camunda Database Configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/camunda_db
+    username: ${CAMUNDA_DB_USERNAME:camunda}
+    password: ${CAMUNDA_DB_PASSWORD:camunda123}
+    
+  flyway:
+    enabled: false # Camunda manages its own migrations
+
+camunda:
+  bpm:
+    user-service:
+      enabled: false
+    history-level: full
+    authorization-enabled: true
+    job-execution-enabled: true
+    deployment-resource-pattern: "classpath*:**.bpmn"
+    
+    # Engine configuration
+    engine:
+      enabled: true
+      
+    # Job executor configuration
+    job-execution:
+      enabled: true
+      max-pool-size: 10
+      queue-capacity: 20
+      
+  # Cockpit configuration
+  cockpit:
+    enabled: true
+    
+  # Tasklist configuration  
+  tasklist:
+    enabled: true
+    assignee-expression: "${assignee}"
+    
+  # Forms configuration
+  forms:
+    enabled: true

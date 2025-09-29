@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" 
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" 
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" 
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn" 
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI" 
+                  xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://camunda.org/schema/1.0/bpmn camunda.xsd" 
+                  id="Definitions_1" 
+                  targetNamespace="http://bpmn.io/schema/bpmn" 
+                  exporter="Camunda Modeler" 
+                  exporterVersion="5.26.0">
+  
+  <bpmn:process id="aml-investigation-workflow" name="AML Investigation Workflow" isExecutable="true">
+    
+    <!-- Start Event -->
+    <bpmn:startEvent id="investigation_start" name="Investigation Triggered">
+      <bpmn:documentation>Case de investigação AML é criado automaticamente ou manualmente</bpmn:documentation>
+    </bpmn:startEvent>
+
+    <!-- Data Enrichment Service Task -->
+    <bpmn:serviceTask id="data_enrichment" name="Data Enrichment" camunda:type="external" camunda:topic="data-enrichment">
+      <bpmn:documentation>Enriquece dados do caso com informações externas e análise automatizada</bpmn:documentation>
+    </bpmn:serviceTask>
+
+    <!-- Initial Risk Assessment Service Task -->
+    <bpmn:serviceTask id="initial_risk_assessment" name="Initial Risk Assessment" camunda:asyncBefore="true">
+      <bpmn:documentation>Avaliação automática inicial de risco do caso</bpmn:documentation>
+      <bpmn:extensionElements>
+        <camunda:script scriptFormat="groovy">
+          <camunda:source>
+            def riskLevel = execution.getVariable("riskLevel")
+            def caseType = execution.getVariable("caseType")
+            def amount = execution.getVariable("amount")
+            
+            // Calcular pontuação de risco
+            def riskScore = 0.0
+            
+            if (riskLevel == "CRITICAL") riskScore += 0.4
+            else if (riskLevel == "HIGH") riskScore += 0.3
+            else if (riskLevel == "MEDIUM") riskScore += 0.2
+            else riskScore += 0.1
+            
+            if (caseType == "STRUCTURING_PATTERN") riskScore += 0.3
+            else if (caseType == "SANCTIONS_MATCH") riskScore += 0.4
+            else if (caseType == "SAR") riskScore += 0.2
+            
+            if (amount && amount > 100000) riskScore += 0.2
+            
+            execution.setVariable("calculatedRiskScore", Math.min(1.0, riskScore))
+            
+            // Classificar urgência
+            if (riskScore >= 0.7) {
+              execution.setVariable("urgencyLevel", "CRITICAL")
+              execution.setVariable("slaHours", 4)
+            } else if (riskScore >= 0.5) {
+              execution.setVariable("urgencyLevel", "HIGH")
+              execution.setVariable("slaHours", 8)
+            } else if (riskScore >= 0.3) {
+              execution.setVariable("urgencyLevel", "MEDIUM")
+              execution.setVariable("slaHours", 24)
+            } else {
+              execution.setVariable("urgencyLevel", "LOW")
+              execution.setVariable("slaHours", 72)
+            }
+          </camunda:source>
+        </camunda:script>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+
+    <!-- Parallel Gateway for Routes -->
+    <bpmn:parallelGateway id="parallel_routes" name="Parallel Processing Routes"/>
+
+    <!-- AML Screening Service Task -->
+    <bpmn:serviceTask id="aml_screening" name="AML Screening" camunda:asyncBefore="true" camunda:type="external" camunda:topic="aml-screening">
+      <bpmn:documentation>Triagem AML automática contra múltiplas bases de dados</bpmn:documentation>
+    </bpmn:serviceTask>
+
+    <!-- Network Analysis Service Task -->
+    <bpmn:serviceTask id="network_analysis" name="Network Analysis" camunda:asyncBefore="true" camunda:type="external" camunda:topic="network-analysis">
+      <bpmn:documentation>Análise de rede de transações e relacionamentos</bpmn:documentation>
+    </bpmn:serviceTask>
+
+    <!-- PEP Screening Service Task -->
+    <bpmn:serviceTask id="pep_screening" name="PEP Screening" camunda:asyncBefore="true" camunda:type="external" camunda:topic="pep-screening">
+      <bpmn:documentation>Verificação de PEP (Pessoas Expostas Politicamente)</bpmn:documentation>
+    </bpmn:serviceTask>
+
+    <!-- Sanctions Screening Service Task -->
+    <bpmn:serviceTask id="sanctions_screening" name="Sanctions Screening" camunda:asyncBefore="true" camunda:type="external" camunda:topic="sanctions-screening">
+      <bpmn:documentation>Confronto com listas de sanções globais</bpmn:documentation>
+    </bpmn:serviceTask>
+
+    <!-- Synchronization Gateway -->
+    <bpmn:parallelGateway id="sync_gateway" name="Sync Results"/>
+
+    <!-- Evidence Aggregation Service Task -->
+    <bpmn:serviceTask id="evidence_aggregation" name="Evidence Aggregation" camunda:asyncBefore="true">
+      <bpmn:documentation>Consolida evidências de todas as análises</bpmn:documentation>
+      <bpmn:extensionElements>
+        <camunda:script scriptFormat="groovy">
+          <camunda:source>
+            def amlResults = execution.getVariable("amlResults")
+            def networkResults = execution.getVariable("networkResults")
+            def pepResults = execution.getVariable("pepResults")
+            def sanctionsResults = execution.getVariable("sanctionsResults")
+            
+            def evidenceStrength = 0.0
+            def suspiciousFlags = []
+            
+            // Avaliar força das evidências
+            if (amlResults && amlResults.confirmedMatch) {
+              evidenceStrength += 0.4
+              suspiciousFlags.add("AML_MATCH_CONFIRMED")
+            }
+            
+            if (networkResults && networkResults.suspiciousNetwork) {
+              evidenceStrength += 0.3
+              suspiciousFlags.add("SUSPICIOUS_NETWORK")
+            }
+            
+            if (pepResults && pepResults.pepMatch) {
+              evidenceStrength += 0.2
+              suspiciousFlags.add("PEP_MATCH")
+            }
+            
+            if (sanctionsResults && sanctionsResults.sanctionsMatch) {
+              evidenceStrength += 0.5
+              suspiciousFlags.add("SANCTIONS_MATCH")
+            }
+            
+            execution.setVariable("evidenceStrength", evidenceStrength)
+            execution.setVariable("suspiciousFlags", suspiciousFlags)
+            
+            // Definir próxima ação baseado na força das evidências
+            if (evidenceStrength >= 0.8) {
+              execution.setVariable("nextAction", "ESCALATE_IMMEDIATELY")
+            } else if (evidenceStrength >= 0.6) {
+              execution.setVariable("nextAction", "MANUAL_INVESTIGATION")
+            } else if (evidenceStrength >= 0.4) {
+              execution.setVariable("nextAction", "REVIEW_REQUIRED")
+            } else {
+              execution.setVariable("nextAction", "ROUTINE_REVIEW")
+            }
+          </camunda:source>
+        </camunda:script>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+
+    <!-- Exclusive Gateway for Next Action -->
+    <bpmn:exclusiveGateway id="next_action_gateway" name="Next Action Decision"/>
+
+    <!-- Immediate Escalation User Task -->
+    <bpmn:userTask id="immediate_escalation" name="Immediate Escalation" camunda:assignee="${escalatedTo}" camunda:candidateGroups="compliance-officers,risk-managers">
+      <bpmn:documentation>Caso crítico - requer escalação imediata para compliance officer</bpmn:documentation>
+      <bpmn:extensionElements>
+        <camunda:formData>
+          <camunda:formField id="escalation_reason" label="Escalation Reason" type="string" required="true"/>
+          <camunda:formField id="urgency_justification" label="Justification" type="long" required="true"/>
+          <camunda:formField id="recommended_actions" label="Recommended Actions" type="string"/>
+        </camunda:formData>
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+
+    <!-- Manual Investigation User Task -->
+    <bpmn:userTask id="manual_investigation" name="Manual Investigation" camunda:candidateGroups="compliance-analysts">
+      <bpmn:documentation>Investigação manual requerida</bpmn:documentation>
+      <bpmn:extensionElements>
+        <camunda:formData>
+          <camunda:formField id="investigation_plan" label="Investigation Plan" type="string" required="true"/>
+          <camunda:formField id="evidence_collected" label="Evidence Collected" type="string"/>
+          <camunda:formField id="customer_cooperation" label="Customer Cooperation" type="string"/>
+          <camunda:formField id="recommended_decision" label="Recommended Decision" type="enum">
+            <camunda:value id="no_action">No Action Required</camunda:value>
+            <camunda:value id="enhanced_monitoring">Enhanced Monitoring</camunda:value>
+            <camunda:value id="account_closure">Account Closure</camunda:value>
+            <camunda:value id="sar_filing">SAR Filing Required</camunda:value>
+            <camunda:value id="regulatory_report">Regulatory Report</camunda:value>
+          </camunda:formField>
+        </camunda:formData>
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+
+    <!-- Review Required User Task -->
+    <bpmn:userTask id="review_required" name="Review Required" camunda:candidateGroups="compliance-analysts">
+      <bpmn:documentation>Revisão manual das evidências automatizadas</bpmn:documentation>
+      <bpmn:extensionElements>
+        <camunda:formData>
+          <camunda:formField id="evidence_review" label="Evidence Review" type="string" required="true"/>
+          <camunda:formField id="additional_info_needed" label="Additional Info Needed" type="string"/>
+          <camunda:formField id="final_decision" label="Final Decision" type="enum">
+            <camunda:value id="false_positive">False Positive</camunda:value>
+            <camunda:value id="requires_investigation">Requires Investigation</camunda:value>
+            <camunda:value id="escalate">Escalate</camunda:value>
+          </camunda:formField>
+        </camunda:formData>
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+
+    <!-- Routine Review User Task -->
+    <bpmn:userTask id="routine_review" name="Routine Review" camunda:candidateGroups="compliance-analysts">
+      <bpmn:documentation>Revisão de rotina de baixo risco</bpmn:documentation>
+    </bpmn:userTask>
+
+    <!-- External Gateway Decision -->
+    <bpmn:exclusiveGateway id="external_integration_gateway" name="External Integration"/>
+
+    <!-- Regulatory Reporting Service Task -->
+    <bpmn:serviceTask id="regulatory_reporting" name="Regulatory Reporting" camunda:asyncBefore="true" camunda:type="external" camunda:topic="regulatory-reporting">
+      <bpmn:documentation>Geração e envio de relatórios regulatórios (SAR/CTR)</bpmn:documentation>
+    </bpmn:serviceTask>
+
+    <!-- Documentation Service Task -->
+    <bpmn:serviceTask id="case_documentation" name="Case Documentation" camunda:asyncBefore="true">
+      <bpmn:documentation>Documentação final do caso</bpmn:documentation>
+    </bpmn:serviceTask>
+
+    <!-- Archive Service Task -->
+    <bpmn:serviceTask id="case_archival" name="Case Archival" camunda:asyncBefore="true">
+      <bpmn:documentation>Arquivamento do caso con forms regulatórias</bpmn:documentation>
+    </bpmn:serviceTask>
+
+    <!-- End Events -->
+    <bpmn:endEvent id="case_closed" name="Case Closed"/>
+    <bpmn:endEvent id="escalted_case" name="Escalated Case"/>
+
+    <!-- Sequence Flows -->
+    <bpmn:sequenceFlow id="flow1" sourceRef="investigation_start" targetRef="data_enrichment"/>
+    <bpmn:sequenceFlow id="flow2" sourceRef="data_enrichment" targetRef="initial_risk_assessment"/>
+    <bpmn:sequenceFlow id="flow3" sourceRef="initial_risk_assessment" targetRef="parallel_routes"/>
+    
+    <!-- Parallel flows -->
+    <bpmn:sequenceFlow id="flow4" sourceRef="parallel_routes" targetRef="aml_screening"/>
+    <bpmn:sequenceFlow id="flow5" sourceRef="parallel_routes" targetRef="network_analysis"/>
+    <bpmn:sequenceFlow id="flow6" sourceRef="parallel_routes" targetRef="pep_screening"/>
+    <bpmn:sequenceFlow id="flow7" sourceRef="parallel_routes" targetRef="sanctions_screening"/>
+    
+    <!-- Back to sync -->
+    <bpmn:sequenceFlow id="flow8<｜tool▁sep｜> sourceRef="aml_screening" targetRef="sync_gateway"/
+    <bpmn:sequenceFlow id="flow9" sourceRef="network_analysis" targetRef="sync_gateway"/>
+    <bpmn:sequenceFlow id="flow10" sourceRef="pep_screening" targetRef="sync_gateway"/>
+    <bpmn:sequenceFlow id="flow11" sourceRef="sanctions_screening" targetRef="sync_gateway"/>
+    
+    <bpmn:sequenceFlow id="flow12" sourceRef="sync_gateway" targetRef="evidence_aggregation"/>
+    <bpmn:sequenceFlow id="flow13" sourceRef="evidence_aggregation" targetRef="next_action_gateway"/>
+    
+    <!-- Decision branches -->
+    <bpmn:sequenceFlow id="flow14" sourceRef="next_action_gateway" targetRef="immediate_escalation">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${nextAction == "ESCALATE_IMMEDIATELY"}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow15" sourceRef="next_action_gateway" targetRef="manual_investigation">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${nextAction == "MANUAL_INVESTIGATION"}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow16" sourceRef|="next_action_gateway" targetRef="review_required">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${nextAction == "REVIEW_REQUIRED"}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow17" sourceRef="next_action_gateway" targetRef="routine_review">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${nextAction == "ROUTINE_REVIEW"}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <!-- Continue with other flows... -->
+    
+  </bpmn:process>
+  
+</bpmn:definitions>
