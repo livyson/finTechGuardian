@@ -1,1 +1,0 @@
-# Regras Drools avançadas

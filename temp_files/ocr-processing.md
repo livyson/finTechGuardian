@@ -1,1 +1,0 @@
-# OCR e document processing

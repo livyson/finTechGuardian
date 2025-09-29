@@ -1,1 +1,0 @@
-# Configurações Prometheus/Grafana

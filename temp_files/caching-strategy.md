@@ -1,1 +1,0 @@
-# Caching strategy avançado
