@@ -26,12 +26,8 @@ import java.util.UUID;
 )
 @JsonSubTypes({
         @JsonSubTypes.Type(value = CustomerEvent.class, name = "CUSTOMER_EVENT"),
-        @JsonSubTypes.Type(value = TransactionEvent.class, name = "TRANSACTION_EVENT"),
-        @JsonSubTypes.Type(value = ComplianceEvent.class, name = "COMPLIANCE_EVENT"),
-        @JsonSubTypes.Type(value = RiskAssessmentEvent.class, name = "RISK_ASSESSMENT_EVENT"),
-        @JsonSubTypes.Type(value = RegulatoryEvent.class, name = "REGULATORY_EVENT"),
-        @JsonSubTypes.Type(value = AlertEvent.class, name = "ALERT_EVENT"),
-        @JsonSubTypes.Type(value = SystemEvent.class, name = "SYSTEM_EVENT")
+        @JsonSubTypes.Type(value = TransactionEvent.class, name = "TRANSACTION_EVENT")
+        // Outros tipos de eventos serão adicionados conforme necessário
 })
 public abstract class DomainEvent {
 
@@ -45,7 +41,7 @@ public abstract class DomainEvent {
      * Tipo do evento de domínio
      */
     @NotNull
-    private DomainEventType eventType;
+    protected DomainEventType eventType;
 
     /**
      * Identificador da entidade que gerou o evento
