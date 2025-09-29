@@ -1,0 +1,190 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: document-service
+  
+  # MongoDB Configuration
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/fintechguardian_documents
+      base-type-mappings:
+        force-document-type-mapping:
+          - pattern: ".entity.*"
+            value: "MONGO_COMMON"
+      auto-index-creation: true
+    
+    # JPA ainda usado para auditoria cross-service
+    jpa:
+      hibernate:
+        ddl-auto: validate
+      show-sql: false
+
+  # Threads virtuais Java 23
+  threads:
+    virtual:
+      enabled: true
+
+  # Security
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/fintechguardian
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# MongoDB GridFS Configuration
+mongodb:
+  gridfs:
+    database: fintechguardian_files
+    bucket: documents
+    chunk-size: 262144 # 256KB chunks
+    enable-md5: true
+    auto-initialize: true
+
+# Document Processing Configuration  
+document-processing:
+  # OCR Configuration
+  ocr:
+    provider: tess4j
+    languages:
+      - eng
+      - por
+    dpi: 300
+    timeout-seconds: 300
+    confidence-threshold: 0.7
+  
+  # File Classification
+  classification:
+    enabled: true
+    models:
+      document-type: /models/document-type-classifier.model
+      fraud-detection: /models/fraud-classifier.model
+    confidence-threshold: 0.8
+  
+  # Image Processing
+  image:
+    formats: [jpg, jpeg, png, tiff, bmp]
+    max-width: 2048
+    max-height: 2048
+    thumbnail-size: 150
+    compression-quality: 0.8
+  
+  # Document Parsing
+  parsing:
+    pdf:
+      password-protected-default: false
+      text-extraction-enabled: true
+      metadata-extraction-enabled: true
+      page-count-limit: 100
+    
+    office:
+      formats: [doc, docx, xls, xlsx, ppt, pptx]
+      password-protected-default: false
+      extract-embedded-objects: true
+    
+    image:
+      auto-rotate: true
+      auto-deskew: true
+      enhance-quality: true
+
+# Storage Configuration
+storage:
+  primary: mongodb-gridfs
+  fallback: local-filesystem
+  fallback-path: /tmp/fintechguardian-docs
+  
+  # Encryption
+  encryption:
+    enabled: true
+    algorithm: AES-256-GCM
+    key-rotation-days: 90
+  
+  # Retention Policies
+  retention:
+    default-days: 2555 # 7 years
+    by-category:
+      KYC_DOCUMENT: 2555 # 7 years
+      AML_EVIDENCE: 2555 # 7 years 
+      COMPLIANCE_DOCUMENT: 2555 # 7 years
+      TRANSACTION_RECORD: 1825 # 5 years
+      AUDIT_TRAIL: 2190 # 6 years
+    
+    cleanup:
+      enabled: true
+      schedule-cron: "0 0 2 * * ?" # Daily at 2 AM
+      batch-size: 1000
+
+# Kafka Configuration
+kafka:
+  bootstrap-servers: localhost:9092
+  consumer:
+    group-id: document-service-group
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+    key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    
+    listeners:
+      document-upload-events: fintechguardian.document.uploaded
+      document-processing-events: fintechguardian.document.processing.completed
+      compliance-case-events: fintechguardian.compliance.case.created
+  
+  producer:
+    acks: all
+    retries: 3
+    key-serializer: org.apache.kafka.common.serialization.StringSerializer
+    value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    
+    topic:
+      document-processed-events: fintechguardian.document.processed
+      document-classified-events: fintechguardian.document.classified
+      fraud-detected-events: fintechguardian.document.fraud.detected
+
+# External Integrations
+external-integrations:
+  # Document Verification APIs
+  document-verification:
+    provider: onfido
+    timeout: 30000
+    retry-attempts: 3
+    
+  # Fraud Detection APIs  
+  fraud-detection:
+    provider: jumio
+    timeout: 30000
+    confidence-threshold: 0.8
+
+# Logging Configuration
+logging:
+  level:
+    com.fintechguardian.document: INFO
+    org.springframework.data.mongodb: DEBUG
+    org.apache.tika: WARN
+    com.github.tess4j: WARN
+    org.mongodb.driver: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%15.15t] %-40.40logger{39} : %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%10.10X{req.requestId}] %-40.40logger{39} : %msg%n"
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /document-service-api-docs
+  swagger-ui:
+    path: /document-service-swagger-ui.html
+    operations-sorter: method
+  packages-to-scan: com.fintechguardian.document
