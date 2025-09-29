@@ -1,0 +1,159 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: customer-profile-service
+  
+  profiles:
+    active: dev
+  
+  # Threading virtual do Java 23
+  threads:
+    virtual:
+      enabled: true
+  
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:fintechguardian}
+    username: ${DB_USERNAME:fintech_user}
+    password: ${DB_PASSWORD:fintech_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
+    open-in-view: false
+  
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_HOSTS:localhost:9092}
+    consumer:
+      group-id: customer-profile-consumer
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.fintechguardian.*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# Logging Configuration
+logging:
+  level:
+    com.fintechguardian: ${LOG_LEVEL:INFO}
+    org.springframework.security: WARN
+    org.hibernate.SQL: DEBUG
+    org.springframework.transaction: DEBUG
+    
+patterns:
+  console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
+
+# Security Configuration
+security:
+  oauth2:
+    resourceserver:
+      jwt:
+        issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8080/oauth2/jwks}
+
+# External APIs Configuration
+external:
+  sanctions:
+    api-url: ${SANCTIONS_API_URL:https://api.sanctions.gov/api/v1}
+    api-key: ${SANCTIONS_API_KEY:your-api-key}
+    timeout: 10000
+  
+  pep:
+    api-url: ${PEP_API_URL:https://api.pepscreening.com/v1}
+    api-key: ${PEP_API_KEY:your-api-key}
+    timeout: 15000
+
+# Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,beans,configprops
+      base-path: /actuator
+  
+  endpoint:
+    health:
+      show-details: when-authorized
+      
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    display-request-duration: 500
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+# Production Configuration
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      
+logging:
+  level:
+    com.fintechguardian: INFO
+    org.hibernate.SQL: WARN
+    org.springframework.transaction: WARN
+
+external:
+  sanctions:
+    timeout: 5000
+  pep:
+    timeout: 8000
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+
+# Test Configuration
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+    
+jpa:
+  hibernate:
+    ddl-auto: create-drop
+  show-sql: false
+
+logging:
+  level:
+    com.fintechguardian: DEBUG
+    org.hibernate.SQL: DEBUG
